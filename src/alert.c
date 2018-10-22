@@ -19,7 +19,7 @@ static int gpio_open(const char *attr)
 {
     // format file name
     char name[40];
-    snprintf(name, sizeof(name), "/sys/class/gpio%d/%s", alert_pin, attr);
+    snprintf(name, sizeof(name), "/sys/class/gpio/gpio%d/%s", alert_pin, attr);
 
     return open(name, O_RDWR);
 }
