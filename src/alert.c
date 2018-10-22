@@ -12,21 +12,18 @@
 #include <string.h>
 #include <unistd.h>
 
-static int alert_fd = -1;
-static int alert_pin;
-
-static int gpio_open(const char *attr)
+static int gpio_open(int gpio_num, const char *attr)
 {
     // format file name
     char name[40];
-    snprintf(name, sizeof(name), "/sys/class/gpio/gpio%d/%s", alert_pin, attr);
+    snprintf(name, sizeof(name), "/sys/class/gpio/gpio%d/%s", gpio_num, attr);
 
     return open(name, O_RDWR);
 }
 
-static int gpio_write(const char *attr, const char *value)
+static int gpio_write(int gpio_num, const char *attr, const char *value)
 {
-    int fd = gpio_open(attr);
+    int fd = gpio_open(gpio_num, attr);
     if (fd < 0) {
         return -1;
     }
@@ -39,62 +36,30 @@ static int gpio_write(const char *attr, const char *value)
 
 int alert_open(int gpio_num)
 {
-    if (alert_fd >= 0) {
-        // already open
-        errno = EBUSY;
-        return -1;
-    }
-
-    if (gpio_num < 0 || gpio_num > 999) {
-        // sanity check failed
-        errno = EINVAL;
-        return -1;
-    }
-
-    alert_pin = gpio_num;
-
     // set direction and edge
-    if (gpio_write("direction", "in")) {
+    if (gpio_write(gpio_num, "direction", "in")) {
         // TODO ignore?
         return -1;
     }
 
-    if (gpio_write("edge", "both")) {
+    if (gpio_write(gpio_num, "edge", "both")) {
         return -1;
     }
 
     // open the "value" file to get the initial value and later us it for
     // interrupt detection
-    alert_fd = gpio_open("value");
-    if (alert_fd < 0) {
-        return -1;
-    }
-
-    return alert_fd;
+    return gpio_open(gpio_num, "value");
 }
 
-int alert_close(void)
+int alert_value(int fd)
 {
-    // close the file descriptor...
-    int ret = close(alert_fd);
-
-    alert_fd = -1;
-    return ret;
-}
-
-int alert_value(void)
-{
-    if (alert_fd < 0) {
-        return -1;
-    }
-
-    if (lseek(alert_fd, 0, SEEK_SET) < 0) {
+    if (lseek(fd, 0, SEEK_SET) < 0) {
         return -1;
     }
 
     char str[8];
     memset(str, 0, sizeof(str));
-    if (read(alert_fd, str, sizeof(str) - 1) < 0) {
+    if (read(fd, str, sizeof(str) - 1) < 0) {
         return -1;
     }
 

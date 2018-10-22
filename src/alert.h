@@ -15,15 +15,8 @@
 int alert_open(int gpio_num);
 
 /**
- * Releases the alert GPIO pin.
- *
- * @return 0 on succes, -1 if error
- */
-int alert_close(void);
-
-/**
  * Reads the current alert signal value.
  *
  * @return alert signal level, or -1 if error
  */
-int alert_value(void);
+int alert_value(int fd);
