@@ -1,2 +1,3 @@
 # zen-bus
-I²C based bus for reliable local communication between ZEN gateways and IO devices
+I²C based bus for reliable local communication between ZEN gateways and ZEN-IO
+devices
