@@ -8,15 +8,21 @@
 #include <errno.h>
 
 #include "alert.h"
+#include "bus.h"
 #include "cmd.h"
 
 #define FD_STDIN 0
 #define FD_ALERT 1
 
 static int alert_fd = -1;
+static int bus_fd = -1;
 
 static void cleanup(void)
 {
+    if (bus_fd >= 0) {
+        close(bus_fd);
+    }
+
     if (alert_fd >= 0) {
         close(alert_fd);
     }
@@ -58,7 +64,6 @@ static int process_cmd(void)
         cmd_free(&cmd);
 
         if (errno == EWOULDBLOCK) {
-            fprintf(stderr, "BLOCK!\n");
             return 0;
         }
 
@@ -72,7 +77,26 @@ static int process_cmd(void)
         exit(EXIT_SUCCESS);
     }
 
-    fprintf(stderr, "command: %d\n", cmd.cmd);
+    fprintf(stderr, "command: %d\n", cmd.code);
+    switch (cmd.code) {
+    case CMD_RESET:
+        result = bus_reset(bus_fd);
+        break;
+
+    case CMD_PACKET:
+        result = bus_send(bus_fd, cmd.addr, cmd.pkt->data, cmd.pkt->len);
+        break;
+
+    default:
+        result = 0;
+        break;
+    }
+
+    if (result < 0) {
+        perror("error: bus");
+        exit(EX_IOERR);
+    }
+
     return 1;
 }
 
@@ -99,13 +123,19 @@ int main(int argc, char *argv[])
     }
 
     // initialize devices
+    atexit(cleanup);
+
     alert_fd = alert_open(gpio_num);
     if (alert_fd < 0) {
         perror("error: alert");
         exit(EX_NOINPUT);
     }
 
-    // TODO mbenda: I2C
+    bus_fd = bus_open(i2c_num);
+    if (bus_fd < 0) {
+        perror("error: bus");
+        exit(EX_NOINPUT);
+    }
 
     // preprare file descriptors for polling
     fcntl(STDIN_FILENO, F_SETFL, fcntl(STDIN_FILENO, F_GETFL, 0) | O_NONBLOCK);
@@ -114,7 +144,7 @@ int main(int argc, char *argv[])
     fds[FD_STDIN].fd = STDIN_FILENO;
     fds[FD_STDIN].events = POLLIN;
     fds[FD_ALERT].fd = alert_fd;
-    fds[FD_ALERT].events = POLLOUT;
+    fds[FD_ALERT].events = POLLERR | POLLPRI;
 
     // enter command loop
     while (poll(fds, 2, -1) >= 0) {

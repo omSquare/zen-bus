@@ -19,7 +19,7 @@ enum {
 };
 
 struct cmd {
-    int cmd;
+    int code;
     int addr;
     struct cmd_packet *pkt;
     struct cmd_udid *udid;
@@ -27,7 +27,7 @@ struct cmd {
 
 struct cmd_packet {
     int len;
-    uint8_t data[];
+    uint8_t *data;
 };
 
 struct cmd_udid {
@@ -45,13 +45,14 @@ struct cmd_udid {
 int cmd_read(int fd, struct cmd *cmd);
 
 /**
- * Writes the given command to the provided file descriptor.
+ * Writes the given command to the output.
  *
- * @param fd the output file descriptor
- * @param cmd the command to write
  * @return 0 on success, 1 on EOF, -1 on error
  */
-int cmd_write(int fd, const struct cmd *cmd);
+int cmd_write(const struct cmd *cmd);
+
+int cmd_write_packet(int addr, struct cmd_packet pkt);
+int cmd_write_ack(int addr);
 
 /**
  * Releases allocated memory for the specified command (packet and UDID).
