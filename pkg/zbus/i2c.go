@@ -20,16 +20,18 @@ import (
 	"unsafe"
 )
 
+// special zbus addresses
 const (
-	addrCall uint8 = 0x00
-	addrConf uint8 = 0x76
-	addrPoll uint8 = 0x77
+	addrCall uint8 = 0x00 // general call address, used for bus reset
+	addrConf uint8 = 0x76 // zbus configuration address
+	addrPoll uint8 = 0x77 // zbus poll address
 )
 
 type i2c struct {
 	fd int
 }
 
+// represents struct i2c_msg from <linux/i2c-dev.h>
 type i2cMsg struct {
 	addr  uint16
 	flags uint16
@@ -38,6 +40,7 @@ type i2cMsg struct {
 	buf   uintptr
 }
 
+// represents struct i2c_rdwr_ioctl_data from <linux/i2c-dev.h>
 type i2cRdwrIoctlData struct {
 	msgs  uintptr
 	nmsgs uint32

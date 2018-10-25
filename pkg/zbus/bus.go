@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// zbusdoc
 package zbus
 
 import (
@@ -20,28 +19,32 @@ import (
 )
 
 const (
+	// Maximum number of an I2C device.
 	MaxI2C = 9
+	// Maximum number of a GPIO alert pin.
 	MaxPin = 999
 
+	// ZBus version.
 	Version = "0.1.0"
 )
 
 const (
-	PacketEvent     eventType = iota // indicates an incoming packet
-	ErrorEvent      eventType = iota // indicates asynchronous bus error TODO?
-	ConnectEvent    eventType = iota
-	DisconnectEvent eventType = iota
+	PacketEvent     eventType = iota // Indicates an incoming packet.
+	ErrorEvent      eventType = iota // Indicates asynchronous bus error. TODO split between bus error and packer error?
+	ConnectEvent    eventType = iota // Indicates that a new slave device connected the bus.
+	DisconnectEvent eventType = iota // Indicates that a device disconnected from the bus.
 )
 
 const (
-	AckError errorType = iota
-	CrcError errorType = iota
+	AckError errorType = iota // A transaction was not acked properly.
+	CrcError errorType = iota // A CRC packet error occurred.
 )
 
 type eventType byte
 type errorType byte
 
-type ZBus struct {
+// Bus holds a channel that delivers asynchronous bus events.
+type Bus struct {
 	Events <-chan Event
 	Err    error
 
@@ -52,6 +55,7 @@ type ZBus struct {
 	done   chan struct{}
 }
 
+// Asynchronous bus event.
 type Event struct {
 	Type eventType
 	Err  errorType
@@ -59,12 +63,14 @@ type Event struct {
 	Pkt  Packet
 }
 
+// Bus packet that consists of a destination address and data payload.
 type Packet struct {
 	Addr uint8
 	Data []uint8
 }
 
-func NewZBus(dev, pin int) (*ZBus, error) {
+// Creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
+func NewBus(dev, pin int) (*Bus, error) {
 	// init GPIO alert and I2C bus
 	bus, err := newI2C(dev)
 	if err != nil {
@@ -78,7 +84,7 @@ func NewZBus(dev, pin int) (*ZBus, error) {
 
 	events := make(chan Event)
 
-	b := &ZBus{
+	b := &Bus{
 		Events: events,
 		alert:  alert,
 		bus:    bus,
@@ -93,19 +99,22 @@ func NewZBus(dev, pin int) (*ZBus, error) {
 	return b, nil
 }
 
-func (b *ZBus) Close() {
+// Closes the bus.
+func (b *Bus) Close() {
 	close(b.done)
 }
 
-func (b *ZBus) Reset() {
+// Resets the state of the bus.
+func (b *Bus) Reset() {
 	b.work <- b.bus.reset
 }
 
-func (b *ZBus) Send(pkt Packet) {
+// Sends a packet on the bus.
+func (b *Bus) Send(pkt Packet) {
 	b.work <- func() error { return b.bus.send(pkt) }
 }
 
-func (b *ZBus) processWork(events chan Event) {
+func (b *Bus) processWork(events chan Event) {
 	defer func() {
 		b.ticker.Stop()
 		b.alert.close()

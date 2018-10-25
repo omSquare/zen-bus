@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// alert
 package zbus
 
 import (
@@ -23,13 +22,14 @@ import (
 )
 
 type alert struct {
-	state chan int
-	err   error
+	state chan int // alert state
+	err   error    // alert error (might be set when the state channel is closed)
 
 	fd   int
 	done chan struct{}
 }
 
+// Configures the alert pin by writing "in" to "direction" and "both" to "edge". Then opens the "value" file.
 func newAlert(pin int) (*alert, error) {
 	gpio := fmt.Sprintf("/sys/class/gpio/gpio%v/", pin)
 
@@ -46,6 +46,7 @@ func newAlert(pin int) (*alert, error) {
 		return nil, err
 	}
 
+	// size of the done channel must be one to prevent deadlock between syscall.Select and selecting the done channel
 	return &alert{make(chan int), nil, fd, make(chan struct{}, 1)}, nil
 }
 
@@ -54,6 +55,7 @@ func (a *alert) close() {
 	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
 }
 
+// Listen for alert signal edges.
 func (a *alert) watch() {
 	defer syscall.Close(a.fd)
 	defer close(a.state)

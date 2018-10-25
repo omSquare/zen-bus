@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//The `zbus' command.
 package main
 
 import (
@@ -24,8 +25,8 @@ import (
 )
 
 const (
-	ExitUsage = 64
-	ExitIOErr = 74
+	exitUsage = 64
+	exitIOErr = 74
 )
 
 type input struct {
@@ -36,10 +37,10 @@ type input struct {
 func main() {
 	dev, pin := parseCmdLine()
 
-	b, err := zbus.NewZBus(dev, pin)
+	b, err := zbus.NewBus(dev, pin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(ExitIOErr)
+		os.Exit(exitIOErr)
 	}
 
 	proto := NewProtocol(os.Stdin, os.Stdout)
@@ -69,7 +70,7 @@ func main() {
 
 	if err != nil && err != io.EOF {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(ExitIOErr)
+		os.Exit(exitIOErr)
 	}
 }
 
@@ -95,7 +96,7 @@ func parseCmdLine() (dev, pin int) {
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: %v <i2c_num> <gpio_num>\n", os.Args[0])
-	os.Exit(ExitUsage)
+	os.Exit(exitUsage)
 }
 
 func readCommands(proto *Protocol) chan input {
@@ -116,7 +117,7 @@ func readCommands(proto *Protocol) chan input {
 	return ch
 }
 
-func processCommand(b *zbus.ZBus, cmd Command) error {
+func processCommand(b *zbus.Bus, cmd Command) error {
 	switch cmd.Type {
 	case CmdReset:
 		b.Reset()

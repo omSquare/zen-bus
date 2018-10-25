@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/omSquare/zen-bus/pkg/zbus"
 	"io"
@@ -22,14 +23,15 @@ import (
 )
 
 const (
-	CmdReset  = iota
-	CmdPacket = iota
+	CmdReset  = iota // The "RST" command.
+	CmdPacket = iota // The "PKT" command.
 )
 
-const PktWidth = 32
+const pktWidth = 32 // number of bytes per packet data line
 
 var hex = [...]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'}
 
+// Command based bus protocol that reads commands from an io.Reader and writes command to an io.Writer.
 type Protocol struct {
 	r   io.Reader
 	w   io.Writer
@@ -38,17 +40,16 @@ type Protocol struct {
 	n   int
 }
 
+// A command received by the protocol.
 type Command struct {
 	Type int
 	Pkt  zbus.Packet
 }
 
-type ProtocolError struct{}
+// Indicates a protocol violation error.
+var ProtocolError = errors.New("protocol violation")
 
-func (ProtocolError) Error() string {
-	return "protocol violation"
-}
-
+// Creates a new protocol for the specified reader and writer.
 func NewProtocol(r io.Reader, w io.Writer) *Protocol {
 	return &Protocol{
 		r:   r,
@@ -59,20 +60,23 @@ func NewProtocol(r io.Reader, w io.Writer) *Protocol {
 
 // TODO write funcs errors?
 
+// Outputs the "welcome" command.
 func (p *Protocol) WriteVersion(ver string) {
 	fmt.Fprintf(p.w, "ZBUS %v\n", ver)
 }
 
+// Outputs the "ERR" command.
 func (p *Protocol) WriteError(addr uint8) {
 	fmt.Fprintf(p.w, "ERR %02X\n", addr)
 }
 
+// Output the "PKT" command.
 func (p *Protocol) WritePacket(pkt zbus.Packet) {
 	fmt.Fprintf(p.w, "PKT %02X %02X\n", pkt.Addr, len(pkt.Data))
-	var line [PktWidth*2 + 1]byte
+	var line [pktWidth*2 + 1]byte
 
 	for i := 0; i < len(pkt.Data); {
-		l := i + PktWidth
+		l := i + pktWidth
 		if l > len(pkt.Data) {
 			l = len(pkt.Data)
 		}
@@ -91,14 +95,17 @@ func (p *Protocol) WritePacket(pkt zbus.Packet) {
 	}
 }
 
+// Outputs the "CONN" command.
 func (p *Protocol) WriteConnect(addr uint8) {
 	fmt.Fprintf(p.w, "CONN %02X\n", addr)
 }
 
+// Outputs the "DISC" command.
 func (p *Protocol) WriteDisconnect(addr uint8) {
 	fmt.Fprintf(p.w, "DISC %02X\n", addr)
 }
 
+// Reads the next command form the protocol input.
 func (p *Protocol) Read() (Command, error) {
 	// read command token first
 	cmd, err := p.nextToken()
@@ -114,7 +121,7 @@ func (p *Protocol) Read() (Command, error) {
 		return p.readPacket()
 
 	default:
-		return Command{}, ProtocolError{}
+		return Command{}, ProtocolError
 	}
 }
 
@@ -122,12 +129,12 @@ func (p *Protocol) readPacket() (Command, error) {
 	// read address, length
 	addr, err := p.nextByte()
 	if err != nil {
-		return Command{}, ProtocolError{}
+		return Command{}, ProtocolError
 	}
 
 	n, err := p.nextByte()
 	if err != nil {
-		return Command{}, ProtocolError{}
+		return Command{}, ProtocolError
 	}
 
 	// TODO validate address and length
@@ -137,7 +144,7 @@ func (p *Protocol) readPacket() (Command, error) {
 	for i := 0; i < len(pkt.Data); {
 		tok, err := p.nextToken()
 		if err != nil || len(tok)%2 == 1 || i+len(tok)/2 > len(pkt.Data) {
-			return Command{}, ProtocolError{}
+			return Command{}, ProtocolError
 		}
 
 		for j := 0; j < len(tok); j += 2 {
@@ -145,7 +152,7 @@ func (p *Protocol) readPacket() (Command, error) {
 			l := hexDigit(tok[j+1])
 
 			if h < 0 || l < 0 {
-				return Command{}, ProtocolError{}
+				return Command{}, ProtocolError
 			}
 
 			pkt.Data[i] = uint8(16*h + l)
@@ -159,12 +166,12 @@ func (p *Protocol) readPacket() (Command, error) {
 func (p *Protocol) nextByte() (uint8, error) {
 	tok, err := p.nextToken()
 	if err != nil {
-		return 0, ProtocolError{}
+		return 0, ProtocolError
 	}
 
 	n, err := strconv.ParseUint(tok, 16, 8)
 	if err != nil {
-		return 0, ProtocolError{}
+		return 0, ProtocolError
 	}
 
 	return uint8(n), nil
