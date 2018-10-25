@@ -79,8 +79,8 @@ type Packet struct {
 	Data []uint8
 }
 
-// NewBus creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
-func NewBus(dev, pin int) (*Bus, error) {
+// New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
+func New(dev, pin int) (*Bus, error) {
 	// init GPIO alert and I2C bus
 	bus, err := newI2C(dev)
 	if err != nil {

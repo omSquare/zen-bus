@@ -15,7 +15,7 @@
 /*
 Package zbus provides master-side link-layer implementation of the zen-bus wire protocol.
 
-The main entry point is the NewBus function that initializes and returns a reference to Bus.
+The main entry point is the New function that initializes and returns a reference to Bus.
 Bus operations are executed asynchronously and results are communicated via the Events channel.
 */
 package zbus

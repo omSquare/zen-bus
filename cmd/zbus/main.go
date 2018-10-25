@@ -37,7 +37,7 @@ type input struct {
 func main() {
 	dev, pin := parseCmdLine()
 
-	b, err := zbus.NewBus(dev, pin)
+	b, err := zbus.New(dev, pin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(exitIOErr)
