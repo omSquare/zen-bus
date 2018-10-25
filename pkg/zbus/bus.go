@@ -29,15 +29,25 @@ const (
 )
 
 const (
-	PacketEvent     eventType = iota // PacketEvent indicates an incoming packet.
-	ErrorEvent      eventType = iota // ErrorEvent indicates asynchronous bus error. TODO split between bus error and packer error?
-	ConnectEvent    eventType = iota // ConnectEvent indicates that a new slave device connected the bus.
-	DisconnectEvent eventType = iota // DisconnectEvent indicates that a device disconnected from the bus.
+	// PacketEvent indicates an incoming packet.
+	PacketEvent eventType = iota
+
+	// ErrorEvent indicates asynchronous bus error.
+	ErrorEvent eventType = iota // TODO split between bus error and packer error?
+
+	// ConnectEvent indicates that a new slave device connected the bus.
+	ConnectEvent eventType = iota
+
+	// DisconnectEvent indicates that a device disconnected from the bus.
+	DisconnectEvent eventType = iota
 )
 
 const (
-	AckError errorType = iota // AckError indicates that a transaction was not acked properly.
-	CrcError errorType = iota // CrcError indicates that a CRC packet error occurred.
+	// AckError indicates that a transaction was not acked properly.
+	AckError errorType = iota
+
+	// CrcError indicates that a CRC packet error occurred.
+	CrcError errorType = iota
 )
 
 type eventType byte

@@ -23,8 +23,11 @@ import (
 )
 
 const (
-	CmdReset  = iota // CmdReset represents the "RST" command.
-	CmdPacket = iota // CmdPacket represents the "PKT" command.
+	// CmdReset represents the "RST" command.
+	CmdReset = iota
+
+	// CmdPacket represents the "PKT" command.
+	CmdPacket = iota
 )
 
 const pktWidth = 32 // number of bytes per packet data line
@@ -46,8 +49,8 @@ type Command struct {
 	Pkt  zbus.Packet
 }
 
-// ProtocolError indicates a protocol violation error.
-var ProtocolError = errors.New("protocol violation")
+// ErrProto indicates a protocol violation error.
+var ErrProto = errors.New("protocol violation")
 
 // NewProtocol creates a new Protocol for the specified reader and writer.
 func NewProtocol(r io.Reader, w io.Writer) *Protocol {
@@ -121,7 +124,7 @@ func (p *Protocol) Read() (Command, error) {
 		return p.readPacket()
 
 	default:
-		return Command{}, ProtocolError
+		return Command{}, ErrProto
 	}
 }
 
@@ -129,12 +132,12 @@ func (p *Protocol) readPacket() (Command, error) {
 	// read address, length
 	addr, err := p.nextByte()
 	if err != nil {
-		return Command{}, ProtocolError
+		return Command{}, ErrProto
 	}
 
 	n, err := p.nextByte()
 	if err != nil {
-		return Command{}, ProtocolError
+		return Command{}, ErrProto
 	}
 
 	// TODO validate address and length
@@ -144,7 +147,7 @@ func (p *Protocol) readPacket() (Command, error) {
 	for i := 0; i < len(pkt.Data); {
 		tok, err := p.nextToken()
 		if err != nil || len(tok)%2 == 1 || i+len(tok)/2 > len(pkt.Data) {
-			return Command{}, ProtocolError
+			return Command{}, ErrProto
 		}
 
 		for j := 0; j < len(tok); j += 2 {
@@ -152,7 +155,7 @@ func (p *Protocol) readPacket() (Command, error) {
 			l := hexDigit(tok[j+1])
 
 			if h < 0 || l < 0 {
-				return Command{}, ProtocolError
+				return Command{}, ErrProto
 			}
 
 			pkt.Data[i] = uint8(16*h + l)
@@ -166,12 +169,12 @@ func (p *Protocol) readPacket() (Command, error) {
 func (p *Protocol) nextByte() (uint8, error) {
 	tok, err := p.nextToken()
 	if err != nil {
-		return 0, ProtocolError
+		return 0, ErrProto
 	}
 
 	n, err := strconv.ParseUint(tok, 16, 8)
 	if err != nil {
-		return 0, ProtocolError
+		return 0, ErrProto
 	}
 
 	return uint8(n), nil
