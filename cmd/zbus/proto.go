@@ -23,15 +23,15 @@ import (
 )
 
 const (
-	CmdReset  = iota // The "RST" command.
-	CmdPacket = iota // The "PKT" command.
+	CmdReset  = iota // CmdReset represents the "RST" command.
+	CmdPacket = iota // CmdPacket represents the "PKT" command.
 )
 
 const pktWidth = 32 // number of bytes per packet data line
 
 var hex = [...]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'}
 
-// Command based bus protocol that reads commands from an io.Reader and writes command to an io.Writer.
+// Protocol is a command based bus protocol that reads commands from an io.Reader and writes command to an io.Writer.
 type Protocol struct {
 	r   io.Reader
 	w   io.Writer
@@ -40,16 +40,16 @@ type Protocol struct {
 	n   int
 }
 
-// A command received by the protocol.
+// Command received by the protocol.
 type Command struct {
 	Type int
 	Pkt  zbus.Packet
 }
 
-// Indicates a protocol violation error.
+// ProtocolError indicates a protocol violation error.
 var ProtocolError = errors.New("protocol violation")
 
-// Creates a new protocol for the specified reader and writer.
+// NewProtocol creates a new Protocol for the specified reader and writer.
 func NewProtocol(r io.Reader, w io.Writer) *Protocol {
 	return &Protocol{
 		r:   r,
@@ -60,17 +60,17 @@ func NewProtocol(r io.Reader, w io.Writer) *Protocol {
 
 // TODO write funcs errors?
 
-// Outputs the "welcome" command.
+// WriteVersion outputs the "welcome" command.
 func (p *Protocol) WriteVersion(ver string) {
 	fmt.Fprintf(p.w, "ZBUS %v\n", ver)
 }
 
-// Outputs the "ERR" command.
+// WriteError outputs the "ERR" command.
 func (p *Protocol) WriteError(addr uint8) {
 	fmt.Fprintf(p.w, "ERR %02X\n", addr)
 }
 
-// Output the "PKT" command.
+// WritePacket outputs the "PKT" command.
 func (p *Protocol) WritePacket(pkt zbus.Packet) {
 	fmt.Fprintf(p.w, "PKT %02X %02X\n", pkt.Addr, len(pkt.Data))
 	var line [pktWidth*2 + 1]byte
@@ -95,17 +95,17 @@ func (p *Protocol) WritePacket(pkt zbus.Packet) {
 	}
 }
 
-// Outputs the "CONN" command.
+// WriteConnect outputs the "CONN" command.
 func (p *Protocol) WriteConnect(addr uint8) {
 	fmt.Fprintf(p.w, "CONN %02X\n", addr)
 }
 
-// Outputs the "DISC" command.
+// WriteDisconnect outputs the "DISC" command.
 func (p *Protocol) WriteDisconnect(addr uint8) {
 	fmt.Fprintf(p.w, "DISC %02X\n", addr)
 }
 
-// Reads the next command form the protocol input.
+// Read reads the next command form the protocol input.
 func (p *Protocol) Read() (Command, error) {
 	// read command token first
 	cmd, err := p.nextToken()

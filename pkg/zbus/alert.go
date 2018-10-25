@@ -55,7 +55,7 @@ func (a *alert) close() {
 	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
 }
 
-// Listen for alert signal edges.
+// Listens for alert signal edges.
 func (a *alert) watch() {
 	defer syscall.Close(a.fd)
 	defer close(a.state)

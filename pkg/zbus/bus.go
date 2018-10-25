@@ -19,25 +19,25 @@ import (
 )
 
 const (
-	// Maximum number of an I2C device.
+	// MaxI2C is the maximum number of an I2C device.
 	MaxI2C = 9
-	// Maximum number of a GPIO alert pin.
+	// MaxPin is the maximum number of a GPIO alert pin.
 	MaxPin = 999
 
-	// ZBus version.
+	// Version contains the zen-bus version.
 	Version = "0.1.0"
 )
 
 const (
-	PacketEvent     eventType = iota // Indicates an incoming packet.
-	ErrorEvent      eventType = iota // Indicates asynchronous bus error. TODO split between bus error and packer error?
-	ConnectEvent    eventType = iota // Indicates that a new slave device connected the bus.
-	DisconnectEvent eventType = iota // Indicates that a device disconnected from the bus.
+	PacketEvent     eventType = iota // PacketEvent indicates an incoming packet.
+	ErrorEvent      eventType = iota // ErrorEvent indicates asynchronous bus error. TODO split between bus error and packer error?
+	ConnectEvent    eventType = iota // ConnectEvent indicates that a new slave device connected the bus.
+	DisconnectEvent eventType = iota // DisconnectEvent indicates that a device disconnected from the bus.
 )
 
 const (
-	AckError errorType = iota // A transaction was not acked properly.
-	CrcError errorType = iota // A CRC packet error occurred.
+	AckError errorType = iota // AckError indicates that a transaction was not acked properly.
+	CrcError errorType = iota // CrcError indicates that a CRC packet error occurred.
 )
 
 type eventType byte
@@ -55,7 +55,7 @@ type Bus struct {
 	done   chan struct{}
 }
 
-// Asynchronous bus event.
+// Event represents an asynchronous bus event.
 type Event struct {
 	Type eventType
 	Err  errorType
@@ -63,13 +63,13 @@ type Event struct {
 	Pkt  Packet
 }
 
-// Bus packet that consists of a destination address and data payload.
+// Packet consists of a destination address and data payload.
 type Packet struct {
 	Addr uint8
 	Data []uint8
 }
 
-// Creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
+// NewBus creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
 func NewBus(dev, pin int) (*Bus, error) {
 	// init GPIO alert and I2C bus
 	bus, err := newI2C(dev)
@@ -99,17 +99,17 @@ func NewBus(dev, pin int) (*Bus, error) {
 	return b, nil
 }
 
-// Closes the bus.
+// Close closes the bus.
 func (b *Bus) Close() {
 	close(b.done)
 }
 
-// Resets the state of the bus.
+// Reset resets the state of the bus.
 func (b *Bus) Reset() {
 	b.work <- b.bus.reset
 }
 
-// Sends a packet on the bus.
+// Send sends a packet on the bus.
 func (b *Bus) Send(pkt Packet) {
 	b.work <- func() error { return b.bus.send(pkt) }
 }

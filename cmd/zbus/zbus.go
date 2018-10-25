@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//The `zbus' command.
+// Command zbus provides zen-bus interface via stdin/stdout.
 package main
 
 import (
