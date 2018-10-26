@@ -22,9 +22,9 @@ import (
 
 // special zbus addresses
 const (
-	addrCall uint8 = 0x00 // general call address, used for bus reset
-	addrConf uint8 = 0x76 // zbus configuration address
-	addrPoll uint8 = 0x77 // zbus poll address
+	callAddr uint8 = 0x00 // general call address, used for bus reset
+	confAddr uint8 = 0x76 // zbus configuration address
+	pollAddr uint8 = 0x77 // zbus poll address
 )
 
 type i2c struct {
@@ -63,7 +63,7 @@ func (b *i2c) close() {
 
 func (b *i2c) reset() error {
 	// TODO error handling
-	return b.transfer(addrCall, false, []uint8{0})
+	return b.transfer(callAddr, false, []uint8{0})
 }
 
 func (b *i2c) send(pkt Packet) error {
@@ -74,7 +74,7 @@ func (b *i2c) send(pkt Packet) error {
 func (b *i2c) poll() (Packet, error) {
 	// perform poll transaction first
 	buf := make([]uint8, 2)
-	if err := b.transfer(addrPoll, true, buf); err != nil {
+	if err := b.transfer(pollAddr, true, buf); err != nil {
 		// TODO error handling
 		return Packet{}, err
 	}
