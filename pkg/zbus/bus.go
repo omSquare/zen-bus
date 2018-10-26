@@ -19,13 +19,16 @@ import (
 )
 
 const (
+	// Version contains the zen-bus version.
+	Version = "0.1.0"
+
 	// MaxI2C is the maximum number of an I2C device.
 	MaxI2C = 9
 	// MaxPin is the maximum number of a GPIO alert pin.
 	MaxPin = 999
 
-	// Version contains the zen-bus version.
-	Version = "0.1.0"
+	// MaxSlaves determines the maximum number of connected slave devices.
+	MaxSlaves = 32
 )
 
 const (
@@ -49,9 +52,6 @@ const (
 	// CrcError indicates that a CRC packet error occurred.
 	CrcError errorType = iota
 )
-
-type eventType byte
-type errorType byte
 
 // Bus holds a channel that delivers asynchronous bus events.
 type Bus struct {
@@ -78,6 +78,18 @@ type Packet struct {
 	Addr uint8
 	Data []uint8
 }
+
+// Udid stands for Unique Device Identifier.
+type Udid = uint64
+
+// Device is a slave device descriptor.
+type Device struct {
+	Id Udid
+	// TODO(mbenda): flags, serial number etc.
+}
+
+type eventType byte
+type errorType byte
 
 // New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
 func New(dev, pin int) (*Bus, error) {
