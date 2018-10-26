@@ -27,6 +27,9 @@ const (
 	// MaxPin is the maximum number of a GPIO alert pin.
 	MaxPin = 999
 
+	// EventCapacity defines the size of the Events channel.
+	EventCapacity = 8
+
 	// MaxSlaves determines the maximum number of connected slave devices.
 	MaxSlaves = 32
 )
@@ -58,6 +61,7 @@ type Bus struct {
 	Events <-chan Event
 	Err    error
 
+	arp    *arp
 	bus    *i2c
 	alert  *alert
 	ticker *time.Ticker
@@ -69,18 +73,21 @@ type Bus struct {
 type Event struct {
 	Type eventType
 	Err  errorType
-	Addr uint8
-	Pkt  Packet
+	Addr Address
+	Pkt  Packet // TODO(mbenda): pointer?
+	Dev  *Device
 }
+
+type Address = uint8
 
 // Packet consists of a destination address and data payload.
 type Packet struct {
-	Addr uint8
-	Data []uint8
+	Addr Address
+	Data []byte
 }
 
 // Udid stands for Unique Device Identifier.
-type Udid = uint64
+type Udid = [8]byte
 
 // Device is a slave device descriptor.
 type Device struct {
@@ -93,8 +100,11 @@ type errorType byte
 
 // New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
 func New(dev, pin int) (*Bus, error) {
+	// prepare ARP
+	arp := &arp{}
+
 	// init GPIO alert and I2C bus
-	bus, err := newI2C(dev)
+	bus, err := newI2C(dev, arp)
 	if err != nil {
 		return nil, err
 	}
@@ -104,11 +114,12 @@ func New(dev, pin int) (*Bus, error) {
 		return nil, err
 	}
 
-	events := make(chan Event)
+	events := make(chan Event, EventCapacity)
 
 	b := &Bus{
 		Events: events,
 		alert:  alert,
+		arp:    arp,
 		bus:    bus,
 		ticker: time.NewTicker(time.Second),
 		work:   make(chan func() error),
@@ -154,7 +165,7 @@ func (b *Bus) processWork(events chan Event) {
 			return
 
 		case <-b.ticker.C:
-			if err := b.bus.discover(); err != nil {
+			if err := b.bus.discover(events); err != nil {
 				b.Err = err
 				return
 			}
@@ -183,7 +194,9 @@ func (b *Bus) processWork(events chan Event) {
 				return
 			}
 
-			events <- Event{Type: PacketEvent, Pkt: pkt}
+			if pkt != nil {
+				events <- Event{Type: PacketEvent, Pkt: *pkt}
+			}
 
 			select {
 			case s, ok := <-b.alert.state:

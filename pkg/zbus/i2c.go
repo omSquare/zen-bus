@@ -22,13 +22,14 @@ import (
 
 // special zbus addresses
 const (
-	callAddr uint8 = 0x00 // general call address, used for bus reset
-	confAddr uint8 = 0x76 // zbus configuration address
-	pollAddr uint8 = 0x77 // zbus poll address
+	callAddr Address = 0x00 // general call address, used for bus reset
+	confAddr Address = 0x76 // zbus configuration address
+	pollAddr Address = 0x77 // zbus poll address
 )
 
 type i2c struct {
-	fd int
+	fd  int
+	arp *arp
 }
 
 // represents struct i2c_msg from <linux/i2c-dev.h>
@@ -46,7 +47,7 @@ type i2cRdwrIoctlData struct {
 	nmsgs uint32
 }
 
-func newI2C(dev int) (*i2c, error) {
+func newI2C(dev int, arp *arp) (*i2c, error) {
 	path := fmt.Sprintf("/dev/i2c-%v", dev)
 
 	fd, err := syscall.Open(path, syscall.O_RDWR, 0)
@@ -54,7 +55,7 @@ func newI2C(dev int) (*i2c, error) {
 		return nil, err
 	}
 
-	return &i2c{fd}, nil
+	return &i2c{fd, arp}, nil
 }
 
 func (b *i2c) close() {
@@ -62,21 +63,28 @@ func (b *i2c) close() {
 }
 
 func (b *i2c) reset() error {
-	// TODO error handling
-	return b.transfer(callAddr, false, []uint8{0})
+	_, err := b.transfer(callAddr, false, []byte{0})
+	return err
 }
 
 func (b *i2c) send(pkt Packet) error {
-	// TODO error handling
-	return b.transfer(pkt.Addr, false, pkt.Data)
+	if ok, err := b.transfer(pkt.Addr, false, pkt.Data); err != nil {
+		return err
+	} else if !ok {
+		// TODO(mbenda): process slave error
+		return nil
+	}
+
+	return nil
 }
 
-func (b *i2c) poll() (Packet, error) {
+func (b *i2c) poll() (*Packet, error) {
 	// perform poll transaction first
-	buf := make([]uint8, 2)
-	if err := b.transfer(pollAddr, true, buf); err != nil {
-		// TODO error handling
-		return Packet{}, err
+	buf := make([]byte, 2)
+	if ok, err := b.transfer(pollAddr, true, buf); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, nil
 	}
 
 	// check received address and length
@@ -85,21 +93,75 @@ func (b *i2c) poll() (Packet, error) {
 	// TODO: validate
 
 	// read data from the slave
-	data := make([]uint8, n)
-	if err := b.transfer(addr, true, data); err != nil {
-		// TODO error handling
-		return Packet{}, err
+	data := make([]byte, n)
+	if ok, err := b.transfer(addr, true, data); err != nil {
+		return nil, err
+	} else if !ok {
+		// TODO(mbenda): notify slave error?
+		return nil, nil
 	}
 
-	return Packet{addr, data}, nil
+	return &Packet{addr, data}, nil
 }
 
-func (b *i2c) discover() error {
-	// TODO
+func (b *i2c) discover(events chan<- Event) error {
+	// ping silent slaves
+	if err := b.ping(events); err != nil {
+		return err
+	}
+
+	// discover non-configured slaves
+	disc := make([]byte, 9) // UDID + Address
+	for {
+		if ok, err := b.transfer(confAddr, true, disc); err != nil {
+			return err
+		} else if !ok {
+			// no one answered
+			return nil
+		}
+
+		// someone answered
+		dev := &Device{}
+		copy(dev.Id[:], disc)
+
+		s, err := b.arp.register(dev)
+		if err != nil {
+			// failed to register new slave
+			// TODO(mbenda): add event for this
+			return nil
+		}
+
+		events <- Event{Type: ConnectEvent, Addr: s.addr, Dev: dev}
+	}
+}
+
+func (b *i2c) ping(events chan<- Event) error {
+	for _, s := range b.arp.slaves {
+		if s.active() {
+			continue
+		}
+
+		// perform "ping" transaction
+		ok, err := b.transfer(s.addr, false, make([]byte, 0))
+		if err != nil {
+			return err
+		}
+
+		if ok {
+			s.touch()
+			continue
+		}
+
+		// slave did not answered
+		// TODO(mbenda): error counter?
+		b.arp.unregister(s)
+		events <- Event{Type: DisconnectEvent, Addr: s.addr}
+	}
+
 	return nil
 }
 
-func (b *i2c) transfer(addr uint8, read bool, data []uint8) error {
+func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
 	const (
 		I2C_M_RD = 0x0001
 		I2C_RDWR = 0x0707
@@ -121,8 +183,12 @@ func (b *i2c) transfer(addr uint8, read bool, data []uint8) error {
 
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(b.fd), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&rdwr)))
 	if errno != 0 {
-		return errno
+		if errno == syscall.EREMOTEIO {
+			return false, nil
+		} else {
+			return false, errno
+		}
 	}
 
-	return nil
+	return true, nil
 }
