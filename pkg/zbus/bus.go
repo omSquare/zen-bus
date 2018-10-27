@@ -78,6 +78,7 @@ type Event struct {
 	Dev  *Device
 }
 
+// Address of a slave device.
 type Address = uint8
 
 // Packet consists of a destination address and data payload.

@@ -185,9 +185,9 @@ func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
 	if errno != 0 {
 		if errno == syscall.EREMOTEIO {
 			return false, nil
-		} else {
-			return false, errno
 		}
+
+		return false, errno
 	}
 
 	return true, nil
