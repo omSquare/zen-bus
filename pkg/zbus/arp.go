@@ -62,6 +62,7 @@ func (a *arp) register(dev *Device) (*slave, error) {
 		return nil, err
 	}
 
+	a.num++
 	s.id = dev.Id
 	s.touch()
 
@@ -69,7 +70,10 @@ func (a *arp) register(dev *Device) (*slave, error) {
 }
 
 func (a *arp) unregister(s *slave) {
-	a.slaves[s.index()] = nil
+	if a.slaves[s.index()] == s {
+		a.slaves[s.index()] = nil
+		a.num--
+	}
 }
 
 // tries to find a slave with the given UDID
@@ -84,6 +88,10 @@ func (a *arp) findSlave(id Udid) *slave {
 
 // finds a free address and allocates a slave
 func (a *arp) findAddr() (*slave, error) {
+	if a.num == MaxSlaves {
+		return nil, errTooManySlaves
+	}
+
 	// TODO(mbenda): slave priorities
 	for i, s := range a.slaves {
 		if s != nil {
