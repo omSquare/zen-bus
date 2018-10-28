@@ -184,9 +184,11 @@ func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(b.fd), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&rdwr)))
 	if errno != 0 {
 		if errno == syscall.EREMOTEIO {
+			// no slave on the other side
 			return false, nil
 		}
 
+		// some other error
 		return false, errno
 	}
 
