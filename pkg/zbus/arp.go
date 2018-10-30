@@ -106,6 +106,10 @@ func (a *arp) findAddr() (*slave, error) {
 	return nil, errTooManySlaves
 }
 
+func (a *arp) slave(addr Address) *slave {
+	return a.slaves[addr-minAddr]
+}
+
 func (s *slave) index() int {
 	return int(s.addr - minAddr)
 }

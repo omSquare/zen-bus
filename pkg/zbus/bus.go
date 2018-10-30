@@ -27,6 +27,9 @@ const (
 	// MaxPin is the maximum number of a GPIO alert pin.
 	MaxPin = 999
 
+	// MaxPacketSize defines the maximum payload size of a packet.
+	MaxPacketSize = 128
+
 	// EventCapacity defines the size of the Events channel.
 	EventCapacity = 8
 
@@ -49,10 +52,13 @@ const (
 )
 
 const (
-	// AckError indicates that a transaction was not acked properly.
+	// BusError indicates that a generic bus error occurred.
+	BusError errorType = iota
+
+	// AckError indicates that a transaction was not acked properly. The Addr field determines the slave.
 	AckError errorType = iota
 
-	// CrcError indicates that a CRC packet error occurred.
+	// CrcError indicates that a CRC packet error occurred. The Addr field determines the slave.
 	CrcError errorType = iota
 )
 
@@ -189,14 +195,9 @@ func (b *Bus) processWork(events chan Event) {
 
 		// process alert
 		for alert {
-			pkt, err := b.bus.poll()
-			if err != nil {
+			if err := b.bus.poll(events, b.arp); err != nil {
 				b.Err = err
 				return
-			}
-
-			if pkt != nil {
-				events <- Event{Type: PacketEvent, Pkt: *pkt}
 			}
 
 			select {

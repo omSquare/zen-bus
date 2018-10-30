@@ -78,30 +78,40 @@ func (b *i2c) send(pkt Packet) error {
 	return nil
 }
 
-func (b *i2c) poll() (*Packet, error) {
+func (b *i2c) poll(events chan<- Event, a *arp) error {
 	// perform poll transaction first
 	buf := make([]byte, 2)
 	if ok, err := b.transfer(pollAddr, true, buf); err != nil {
-		return nil, err
+		return err
 	} else if !ok {
-		return nil, nil
+		// no pending transfers
+		return nil
 	}
 
 	// check received address and length
 	addr := buf[0]
-	n := buf[1]
-	// TODO: validate
+	n := uint8(buf[1])
+
+	s := a.slave(addr)
+	if s == nil || n < 1 || n > MaxPacketSize {
+		events <- Event{Type: ErrorEvent, Err: BusError}
+		return nil
+	}
 
 	// read data from the slave
 	data := make([]byte, n)
-	if ok, err := b.transfer(addr, true, data); err != nil {
-		return nil, err
-	} else if !ok {
-		// TODO(mbenda): notify slave error?
-		return nil, nil
+	ok, err := b.transfer(addr, true, data)
+	if err != nil {
+		return err
 	}
 
-	return &Packet{addr, data}, nil
+	if !ok {
+		events <- Event{Type: ErrorEvent, Err: AckError, Addr: addr}
+	} else {
+		events <- Event{Type: PacketEvent, Pkt: Packet{addr, data}}
+	}
+
+	return nil
 }
 
 func (b *i2c) discover(events chan<- Event) error {
