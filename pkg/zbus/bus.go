@@ -67,6 +67,7 @@ type Bus struct {
 	Events <-chan Event
 	Err    error
 
+	ev     chan Event
 	arp    *arp
 	bus    *i2c
 	alert  *alert
@@ -125,6 +126,7 @@ func New(dev, pin int) (*Bus, error) {
 
 	b := &Bus{
 		Events: events,
+		ev:     events,
 		alert:  alert,
 		arp:    arp,
 		bus:    bus,
@@ -134,7 +136,7 @@ func New(dev, pin int) (*Bus, error) {
 	}
 
 	go alert.watch()
-	go b.processWork(events)
+	go b.processWork()
 
 	return b, nil
 }
@@ -151,15 +153,15 @@ func (b *Bus) Reset() {
 
 // Send sends a packet on the bus.
 func (b *Bus) Send(pkt Packet) {
-	b.work <- func() error { return b.bus.send(pkt) }
+	b.work <- func() error { return b.bus.send(b.ev, pkt) }
 }
 
-func (b *Bus) processWork(events chan Event) {
+func (b *Bus) processWork() {
 	defer func() {
 		b.ticker.Stop()
 		b.alert.close()
 		b.bus.close()
-		close(events)
+		close(b.ev)
 	}()
 
 	var alert bool
@@ -172,7 +174,7 @@ func (b *Bus) processWork(events chan Event) {
 			return
 
 		case <-b.ticker.C:
-			if err := b.bus.discover(events); err != nil {
+			if err := b.bus.discover(b.ev); err != nil {
 				b.Err = err
 				return
 			}
@@ -195,7 +197,7 @@ func (b *Bus) processWork(events chan Event) {
 
 		// process alert
 		for alert {
-			if err := b.bus.poll(events, b.arp); err != nil {
+			if err := b.bus.poll(b.ev, b.arp); err != nil {
 				b.Err = err
 				return
 			}

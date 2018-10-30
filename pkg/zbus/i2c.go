@@ -67,12 +67,21 @@ func (b *i2c) reset() error {
 	return err
 }
 
-func (b *i2c) send(pkt Packet) error {
-	if ok, err := b.transfer(pkt.Addr, false, pkt.Data); err != nil {
+func (b *i2c) send(events chan<- Event, pkt Packet) error {
+	s := b.arp.slave(pkt.Addr)
+	if s == nil {
+		events <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
+	}
+
+	ok, err := b.transfer(pkt.Addr, false, pkt.Data)
+	if err != nil {
 		return err
-	} else if !ok {
-		// TODO(mbenda): process slave error
-		return nil
+	}
+
+	if ok {
+		s.touch()
+	} else {
+		events <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
 	}
 
 	return nil
@@ -105,10 +114,11 @@ func (b *i2c) poll(events chan<- Event, a *arp) error {
 		return err
 	}
 
-	if !ok {
-		events <- Event{Type: ErrorEvent, Err: AckError, Addr: addr}
-	} else {
+	if ok {
+		s.touch()
 		events <- Event{Type: PacketEvent, Pkt: Packet{addr, data}}
+	} else {
+		events <- Event{Type: ErrorEvent, Err: AckError, Addr: addr}
 	}
 
 	return nil
