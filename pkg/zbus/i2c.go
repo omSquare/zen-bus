@@ -147,7 +147,7 @@ func (b *i2c) discover(events chan<- Event) error {
 		s, err := b.arp.register(dev)
 		if err != nil {
 			// failed to register new slave
-			// TODO(mbenda): add event for this
+			events <- Event{Type: ErrorEvent, Err: RegError}
 			return nil
 		}
 

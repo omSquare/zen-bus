@@ -60,6 +60,9 @@ const (
 
 	// CrcError indicates that a CRC packet error occurred. The Addr field determines the slave.
 	CrcError errorType = iota
+
+	// RegError indicates that a slave device could not register properly.
+	RegError errorType = iota
 )
 
 // Bus holds a channel that delivers asynchronous bus events.
