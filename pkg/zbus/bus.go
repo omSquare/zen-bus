@@ -85,7 +85,7 @@ type Event struct {
 	Type eventType
 	Err  errorType
 	Addr Address
-	Pkt  Packet // TODO(mbenda): pointer?
+	Pkt  *Packet
 	Dev  *Device
 }
 

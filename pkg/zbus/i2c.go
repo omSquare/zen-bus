@@ -116,7 +116,7 @@ func (b *i2c) poll(events chan<- Event, a *arp) error {
 
 	if ok {
 		s.touch()
-		events <- Event{Type: PacketEvent, Pkt: Packet{addr, data}}
+		events <- Event{Type: PacketEvent, Pkt: &Packet{addr, data}}
 	} else {
 		events <- Event{Type: ErrorEvent, Err: AckError, Addr: addr}
 	}

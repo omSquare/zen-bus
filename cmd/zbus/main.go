@@ -131,7 +131,7 @@ func processCommand(b *zbus.Bus, cmd Command) error {
 func processEvent(p *Protocol, ev zbus.Event) error {
 	switch ev.Type {
 	case zbus.PacketEvent:
-		p.WritePacket(ev.Pkt)
+		p.WritePacket(*ev.Pkt)
 
 	case zbus.ErrorEvent:
 		p.WriteError(ev.Addr)
