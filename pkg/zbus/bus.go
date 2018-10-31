@@ -24,6 +24,7 @@ const (
 
 	// MaxI2C is the maximum number of an I2C device.
 	MaxI2C = 9
+
 	// MaxPin is the maximum number of a GPIO alert pin.
 	MaxPin = 999
 
@@ -42,7 +43,7 @@ const (
 	PacketEvent eventType = iota
 
 	// ErrorEvent indicates asynchronous bus error.
-	ErrorEvent eventType = iota // TODO split between bus error and packer error?
+	ErrorEvent eventType = iota
 
 	// ConnectEvent indicates that a new slave device connected the bus.
 	ConnectEvent eventType = iota
