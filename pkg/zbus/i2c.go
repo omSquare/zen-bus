@@ -45,7 +45,7 @@ func newI2C(dev int, arp *arp) (*i2c, error) {
 
 	fd, err := syscall.Open(path, syscall.O_RDWR, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open %s: %v", path, err)
 	}
 
 	return &i2c{fd, arp}, nil
