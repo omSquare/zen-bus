@@ -15,6 +15,7 @@
 package zbus
 
 import (
+	"errors"
 	"time"
 )
 
@@ -124,6 +125,15 @@ type errorType byte
 
 // New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
 func New(dev, pin int) (*Bus, error) {
+	// check parameters
+	if dev < 0 || dev > MaxI2C {
+		return nil, errors.New("invalid I2C device index")
+	}
+
+	if pin < 0 || pin > MaxPin {
+		return nil, errors.New("invalid GPIO pin index")
+	}
+
 	// prepare ARP
 	arp := &arp{}
 
