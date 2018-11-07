@@ -1,6 +1,9 @@
 # macOS files
 .DS_Store
 
+# Build output
+build/
+
 # Binaries for programs and plugins
 *.exe
 *.dll
