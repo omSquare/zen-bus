@@ -20,13 +20,6 @@ import (
 	"unsafe"
 )
 
-// special zbus addresses
-const (
-	callAddr Address = 0x00 // general call address, used for bus reset
-	confAddr Address = 0x76 // zbus configuration address
-	pollAddr Address = 0x77 // zbus poll address
-)
-
 type i2c struct {
 	fd  int
 	arp *arp
@@ -63,7 +56,7 @@ func (b *i2c) close() {
 }
 
 func (b *i2c) reset() error {
-	_, err := b.transfer(callAddr, false, []byte{0})
+	_, err := b.transfer(CallAddr, false, []byte{0})
 	return err
 }
 
@@ -90,7 +83,7 @@ func (b *i2c) send(events chan<- Event, pkt Packet) error {
 func (b *i2c) poll(events chan<- Event, a *arp) error {
 	// perform poll transaction first
 	buf := make([]byte, 2)
-	if ok, err := b.transfer(pollAddr, true, buf); err != nil {
+	if ok, err := b.transfer(PollAddr, true, buf); err != nil {
 		return err
 	} else if !ok {
 		// no pending transfers
@@ -133,7 +126,7 @@ func (b *i2c) discover(events chan<- Event) error {
 	// discover non-configured slaves
 	disc := make([]byte, 9) // UDID + Address
 	for {
-		if ok, err := b.transfer(confAddr, true, disc); err != nil {
+		if ok, err := b.transfer(ConfAddr, true, disc); err != nil {
 			return err
 		} else if !ok {
 			// no one answered

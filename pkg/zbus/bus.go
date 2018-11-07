@@ -39,6 +39,18 @@ const (
 )
 
 const (
+	// CallAddr is the general call address. All slave devices listen to this broadcast address.
+	CallAddr Address = 0x00 // general call address, used for bus reset
+
+	// ConfAddr is a broadcast address used to configure slave devices that connect to the bus.
+	ConfAddr Address = 0x76
+
+	// PollAddr is a broadcast address that all registered slaves listen on. Any slave device that has data to send will
+	// answer this address.
+	PollAddr Address = 0x77
+)
+
+const (
 	// PacketEvent indicates an incoming packet.
 	PacketEvent eventType = iota
 
