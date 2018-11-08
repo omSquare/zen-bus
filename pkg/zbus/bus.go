@@ -123,6 +123,8 @@ type Device struct {
 type eventType byte
 type errorType byte
 
+// TODO(mbenda): logging
+
 // New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
 func New(dev, pin int) (*Bus, error) {
 	// check parameters
@@ -223,6 +225,7 @@ func (b *Bus) processWork() {
 
 		// process alert
 		for alert {
+			// TODO(mbenda): alert limit
 			if err := b.bus.poll(b.ev, b.arp); err != nil {
 				b.Err = err
 				return
