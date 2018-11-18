@@ -223,13 +223,21 @@ func (b *Bus) processWork() {
 			alert = s == 0
 		}
 
-		// process alert
+		// process alert, not more than MaxSlaves in a row
+		limit := MaxSlaves
+
 		for alert {
-			// TODO(mbenda): alert limit
 			if err := b.bus.poll(b.ev, b.arp); err != nil {
 				b.Err = err
 				return
 			}
+
+			if limit == 0 {
+				// stop processing alerts TODO bus error instead?
+				break
+			}
+
+			limit--
 
 			select {
 			case s, ok := <-b.alert.state:
