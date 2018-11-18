@@ -140,7 +140,10 @@ func (p *Protocol) readPacket() (Command, error) {
 		return Command{}, ErrProto
 	}
 
-	// TODO validate address and length
+	// validate length
+	if n < 1 || n > zbus.MaxPacketSize {
+		return Command{}, ErrProto
+	}
 
 	// read data
 	pkt := zbus.Packet{addr, make([]uint8, n)}
