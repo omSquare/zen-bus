@@ -43,7 +43,7 @@ func main() {
 		os.Exit(exitIOErr)
 	}
 
-	proto := NewProtocol(os.Stdin, os.Stdout)
+	proto := NewTextProtocol(os.Stdin, os.Stdout)
 	input := readCommands(proto)
 
 	proto.WriteVersion(zbus.Version)
@@ -99,7 +99,7 @@ func usage() {
 	os.Exit(exitUsage)
 }
 
-func readCommands(proto *Protocol) chan input {
+func readCommands(proto Protocol) chan input {
 	ch := make(chan input)
 	go func() {
 		for {
@@ -128,7 +128,7 @@ func processCommand(b *zbus.Bus, cmd Command) error {
 	return nil
 }
 
-func processEvent(p *Protocol, ev zbus.Event) error {
+func processEvent(p Protocol, ev zbus.Event) error {
 	switch ev.Type {
 	case zbus.PacketEvent:
 		p.WritePacket(*ev.Pkt)
