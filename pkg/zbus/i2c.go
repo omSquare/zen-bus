@@ -52,7 +52,7 @@ func newI2C(dev int, arp *arp) (*i2c, error) {
 }
 
 func (b *i2c) close() {
-	syscall.Close(b.fd)
+	_ = syscall.Close(b.fd)
 }
 
 func (b *i2c) reset() error {
