@@ -21,7 +21,7 @@ import (
 	"syscall"
 )
 
-type alert struct {
+type gpio struct {
 	state chan int // alert state
 	err   error    // alert error (might be set when the state channel is closed)
 
@@ -30,35 +30,37 @@ type alert struct {
 }
 
 // Configures the alert pin by writing "in" to "direction" and "both" to "edge". Then opens the "value" file.
-func newAlert(pin int) (*alert, error) {
-	gpio := fmt.Sprintf("/sys/class/gpio/gpio%v/", pin)
+func newGpio(pin int) (*gpio, error) {
+	path := fmt.Sprintf("/sys/class/gpio/gpio%v/", pin)
 
-	if err := ioutil.WriteFile(gpio+"direction", []byte("in"), 0666); err != nil {
+	if err := ioutil.WriteFile(path+"direction", []byte("in"), 0666); err != nil {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(gpio+"edge", []byte("both"), 0666); err != nil {
+	if err := ioutil.WriteFile(path+"edge", []byte("both"), 0666); err != nil {
 		return nil, err
 	}
 
-	fd, err := syscall.Open(gpio+"value", syscall.O_RDONLY, 0666)
+	fd, err := syscall.Open(path+"value", syscall.O_RDONLY, 0666)
 	if err != nil {
 		return nil, err
 	}
 
 	// size of the done channel must be one to prevent deadlock between syscall.Select and selecting the done channel
-	return &alert{make(chan int), nil, fd, make(chan struct{}, 1)}, nil
+	return &gpio{make(chan int), nil, fd, make(chan struct{}, 1)}, nil
 }
 
-func (a *alert) close() {
+func (a *gpio) close() {
 	close(a.done)
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
 }
 
 // Listens for alert signal edges.
-func (a *alert) watch() {
-	defer syscall.Close(a.fd)
-	defer close(a.state)
+func (a *gpio) watch() {
+	defer func() {
+		_ = syscall.Close(a.fd)
+		close(a.state)
+	}()
 
 	buf := make([]byte, 16)
 

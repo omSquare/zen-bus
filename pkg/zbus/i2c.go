@@ -32,7 +32,7 @@ type I2CBus struct {
 	arp    *arp
 
 	i2c   int
-	alert *alert
+	alert *gpio
 }
 
 // represents struct i2c_msg from <linux/i2c-dev.h>
@@ -69,7 +69,7 @@ func NewI2CBus(dev int, pin int) (*I2CBus, error) {
 	}
 
 	// open GPIO alert pin
-	alert, err := newAlert(pin)
+	alert, err := newGpio(pin)
 
 	b := &I2CBus{
 		ev: make(chan Event, EventCapacity),
