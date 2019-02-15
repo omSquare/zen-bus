@@ -51,16 +51,19 @@ func newI2C(dev int, arp *arp) (*i2c, error) {
 	return &i2c{fd, arp}, nil
 }
 
-func (b *i2c) close() {
+// Close closes the I2C device.
+func (b *i2c) Close() {
 	_ = syscall.Close(b.fd)
 }
 
-func (b *i2c) reset() error {
+// Reset resets the I2C bus by sending the reset command.
+func (b *i2c) Reset() error {
 	_, err := b.transfer(CallAddr, false, []byte{0})
 	return err
 }
 
-func (b *i2c) send(events chan<- Event, pkt Packet) error {
+// Send sends a packet to the I2C bus.
+func (b *i2c) Send(events chan<- Event, pkt Packet) error {
 	s := b.arp.slave(pkt.Addr)
 	if s == nil {
 		events <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
@@ -80,7 +83,8 @@ func (b *i2c) send(events chan<- Event, pkt Packet) error {
 	return nil
 }
 
-func (b *i2c) poll(events chan<- Event) error {
+// Poll polls packets from the I2C bus.
+func (b *i2c) Poll(events chan<- Event) error {
 	// perform poll transaction first
 	buf := make([]byte, 2)
 	if ok, err := b.transfer(PollAddr, true, buf); err != nil {
@@ -117,13 +121,15 @@ func (b *i2c) poll(events chan<- Event) error {
 	return nil
 }
 
-func (b *i2c) discover(events chan<- Event) error {
+// Discover pings all existing slaves and tries to discover new ones.
+func (b *i2c) Discover(events chan<- Event) error {
 	// ping silent slaves
 	if err := b.ping(events); err != nil {
 		return err
 	}
 
 	// discover non-configured slaves
+	// TODO(mbenda): some limit
 	disc := make([]byte, 9) // UDID + Address
 	for {
 		if ok, err := b.transfer(ConfAddr, true, disc); err != nil {
@@ -176,8 +182,8 @@ func (b *i2c) ping(events chan<- Event) error {
 
 func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
 	const (
-		I2C_M_RD = 0x0001
-		I2C_RDWR = 0x0707
+		I2cMRd  = 0x0001
+		I2cRdwr = 0x0707
 	)
 
 	// prepare message
@@ -188,13 +194,13 @@ func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
 	}
 
 	if read {
-		msg.flags = I2C_M_RD
+		msg.flags = I2cMRd
 	}
 
 	// prepare RDWR ioctl data
 	rdwr := i2cRdwrIoctlData{uintptr(unsafe.Pointer(&msg)), 1}
 
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(b.fd), uintptr(I2C_RDWR), uintptr(unsafe.Pointer(&rdwr)))
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(b.fd), uintptr(I2cRdwr), uintptr(unsafe.Pointer(&rdwr)))
 	if errno != 0 {
 		// TODO(mbenda): determine which errors are fatal... or count number of successive errors
 		return false, nil

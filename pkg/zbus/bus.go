@@ -85,9 +85,9 @@ type Bus struct {
 	Err    error
 
 	ev     chan Event
-	arp    *arp
-	bus    *i2c
+	driver Driver
 	alert  *alert
+	arp    *arp
 	ticker *time.Ticker
 	work   chan func() error
 	done   chan struct{}
@@ -123,6 +123,25 @@ type Device struct {
 type eventType byte
 type errorType byte
 
+// Driver handles low-level bus communication.
+type Driver interface {
+	// Close closes the bus.
+	Close()
+
+	// Reset resets the bus.
+	Reset() error
+
+	// Discover discovers new slave devices on the bus. Discovered clients are sent as events to the provided channel.
+	Discover(events chan<- Event) error
+
+	// Poll polls for data packets from slave devices. Received packets are sent to the provided channel as packet
+	// events.
+	Poll(events chan<- Event) error
+
+	// Sends sends a packet to a slave device. Eventual errors are sent to the provided channel as error events.
+	Send(events chan<- Event, pkt Packet) error
+}
+
 // TODO(mbenda): logging
 
 // New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
@@ -157,7 +176,7 @@ func New(dev, pin int) (*Bus, error) {
 		ev:     events,
 		alert:  alert,
 		arp:    arp,
-		bus:    bus,
+		driver: bus,
 		ticker: time.NewTicker(time.Second),
 		work:   make(chan func() error),
 		done:   make(chan struct{}),
@@ -176,19 +195,19 @@ func (b *Bus) Close() {
 
 // Reset resets the state of the bus.
 func (b *Bus) Reset() {
-	b.work <- b.bus.reset
+	b.work <- b.driver.Reset
 }
 
 // Send sends a packet on the bus.
 func (b *Bus) Send(pkt Packet) {
-	b.work <- func() error { return b.bus.send(b.ev, pkt) }
+	b.work <- func() error { return b.driver.Send(b.ev, pkt) }
 }
 
 func (b *Bus) processWork() {
 	defer func() {
 		b.ticker.Stop()
 		b.alert.close()
-		b.bus.close()
+		b.driver.Close()
 		close(b.ev)
 	}()
 
@@ -227,7 +246,7 @@ func (b *Bus) processWork() {
 		limit := MaxSlaves
 
 		for alert {
-			if err := b.bus.poll(b.ev); err != nil {
+			if err := b.driver.Poll(b.ev); err != nil {
 				b.Err = err
 				return
 			}
