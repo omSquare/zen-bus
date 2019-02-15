@@ -70,6 +70,9 @@ func NewI2CBus(dev int, pin int) (*I2CBus, error) {
 
 	// open GPIO alert pin
 	alert, err := newGpio(pin)
+	if err != nil {
+		return nil, err
+	}
 
 	b := &I2CBus{
 		ev: make(chan Event, EventCapacity),
