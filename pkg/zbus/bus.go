@@ -221,7 +221,7 @@ func (b *Bus) processWork() {
 			return
 
 		case <-b.ticker.C:
-			if err := b.bus.discover(b.ev); err != nil {
+			if err := b.driver.Discover(b.ev); err != nil {
 				b.Err = err
 				return
 			}
