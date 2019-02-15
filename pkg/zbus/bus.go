@@ -14,11 +14,6 @@
 
 package zbus
 
-import (
-	"errors"
-	"time"
-)
-
 const (
 	// Version contains the zen-bus version.
 	Version = "0.1.0"
@@ -66,6 +61,10 @@ const (
 )
 
 const (
+	// SysError represents an unrecoverable system error that prevents the bus from functioning properly. The client
+	// must close the bus after receiving this error event. TODO proper error passing.
+	SysError errorType = iota
+
 	// BusError indicates that a generic bus error occurred.
 	BusError errorType = iota
 
@@ -80,17 +79,18 @@ const (
 )
 
 // Bus holds a channel that delivers asynchronous bus events.
-type Bus struct {
-	Events <-chan Event
-	Err    error
+type Bus interface {
+	// Close closes the bus asynchronously.
+	Close()
 
-	ev     chan Event
-	driver Driver
-	alert  *alert
-	arp    *arp
-	ticker *time.Ticker
-	work   chan func() error
-	done   chan struct{}
+	// Reset resets the state of the bus asynchronously.
+	Reset()
+
+	// Send sends a packet on the bus asynchronously.
+	Send(pkt Packet)
+
+	// Events provides access to bus events.
+	Events() <-chan Event
 }
 
 // Event represents an asynchronous bus event.
@@ -123,153 +123,4 @@ type Device struct {
 type eventType byte
 type errorType byte
 
-// Driver handles low-level bus communication.
-type Driver interface {
-	// Close closes the bus.
-	Close()
-
-	// Reset resets the bus.
-	Reset() error
-
-	// Discover discovers new slave devices on the bus. Discovered clients are sent as events to the provided channel.
-	Discover(events chan<- Event) error
-
-	// Poll polls for data packets from slave devices. Received packets are sent to the provided channel as packet
-	// events.
-	Poll(events chan<- Event) error
-
-	// Sends sends a packet to a slave device. Eventual errors are sent to the provided channel as error events.
-	Send(events chan<- Event, pkt Packet) error
-}
-
 // TODO(mbenda): logging
-
-// New creates and returns a new Bus for the specified I2C device number and alert GPIO pin.
-func New(dev, pin int) (*Bus, error) {
-	// check parameters
-	if dev < 0 || dev > MaxI2C {
-		return nil, errors.New("invalid I2C device index")
-	}
-
-	if pin < 0 || pin > MaxPin {
-		return nil, errors.New("invalid GPIO pin index")
-	}
-
-	// prepare ARP
-	arp := &arp{}
-
-	// init GPIO alert and I2C bus
-	bus, err := newI2C(dev, arp)
-	if err != nil {
-		return nil, err
-	}
-
-	alert, err := newAlert(pin)
-	if err != nil {
-		return nil, err
-	}
-
-	events := make(chan Event, EventCapacity)
-
-	b := &Bus{
-		Events: events,
-		ev:     events,
-		alert:  alert,
-		arp:    arp,
-		driver: bus,
-		ticker: time.NewTicker(time.Second),
-		work:   make(chan func() error),
-		done:   make(chan struct{}),
-	}
-
-	go alert.watch()
-	go b.processWork()
-
-	return b, nil
-}
-
-// Close closes the bus.
-func (b *Bus) Close() {
-	close(b.done)
-}
-
-// Reset resets the state of the bus.
-func (b *Bus) Reset() {
-	b.work <- b.driver.Reset
-}
-
-// Send sends a packet on the bus.
-func (b *Bus) Send(pkt Packet) {
-	b.work <- func() error { return b.driver.Send(b.ev, pkt) }
-}
-
-func (b *Bus) processWork() {
-	defer func() {
-		b.ticker.Stop()
-		b.alert.close()
-		b.driver.Close()
-		close(b.ev)
-	}()
-
-	var alert bool
-
-	for {
-		// wait for next event
-		select {
-		case <-b.done:
-			// we are done here
-			return
-
-		case <-b.ticker.C:
-			if err := b.driver.Discover(b.ev); err != nil {
-				b.Err = err
-				return
-			}
-
-		case fn := <-b.work:
-			// do some work
-			if err := fn(); err != nil {
-				// terminate with the error
-				b.Err = err
-				return
-			}
-
-		case s, ok := <-b.alert.state:
-			if !ok {
-				b.Err = b.alert.err
-				return
-			}
-			alert = s == 0
-		}
-
-		// process alert, not more than MaxSlaves in a row
-		limit := MaxSlaves
-
-		for alert {
-			if err := b.driver.Poll(b.ev); err != nil {
-				b.Err = err
-				return
-			}
-
-			if limit == 0 {
-				// stop processing alerts TODO bus error instead?
-				break
-			}
-
-			limit--
-
-			select {
-			case s, ok := <-b.alert.state:
-				if !ok {
-					b.Err = b.alert.err
-					return
-				}
-				alert = s == 0
-
-			default:
-				// poll for another packet
-				break
-			}
-		}
-	}
-}

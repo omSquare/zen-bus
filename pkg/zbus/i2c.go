@@ -15,14 +15,24 @@
 package zbus
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
-type i2c struct {
-	fd  int
-	arp *arp
+// I2CBus implements the Bus interface using I2C and GPIO.
+type I2CBus struct {
+	ev chan Event
+
+	ticker *time.Ticker
+	work   chan func() error
+	done   chan struct{}
+	arp    *arp
+
+	i2c   int
+	alert *alert
 }
 
 // represents struct i2c_msg from <linux/i2c-dev.h>
@@ -40,51 +50,155 @@ type i2cRdwrIoctlData struct {
 	nmsgs uint32
 }
 
-func newI2C(dev int, arp *arp) (*i2c, error) {
-	path := fmt.Sprintf("/dev/i2c-%v", dev)
-
-	fd, err := syscall.Open(path, syscall.O_RDWR, 0)
-	if err != nil {
-		return nil, fmt.Errorf("open %s: %v", path, err)
+// NewI2CBus creates a new I2C and GPIO based Bus instance.
+func NewI2CBus(dev int, pin int) (*I2CBus, error) {
+	// check parameters
+	if dev < 0 || dev > MaxI2C {
+		return nil, errors.New("invalid I2C device index")
 	}
 
-	return &i2c{fd, arp}, nil
+	if pin < 0 || pin > MaxPin {
+		return nil, errors.New("invalid GPIO pin index")
+	}
+
+	// open I2C device
+	i2cPath := fmt.Sprintf("/dev/i2c-%v", dev)
+	i2c, err := syscall.Open(i2cPath, syscall.O_RDWR, 0)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %v", i2cPath, err)
+	}
+
+	// open GPIO alert pin
+	alert, err := newAlert(pin)
+
+	b := &I2CBus{
+		ev: make(chan Event, EventCapacity),
+
+		ticker: time.NewTicker(time.Second),
+		work:   make(chan func() error),
+		done:   make(chan struct{}),
+
+		arp:   &arp{},
+		i2c:   i2c,
+		alert: alert,
+	}
+
+	return b, nil
 }
 
-// Close closes the I2C device.
-func (b *i2c) Close() {
-	_ = syscall.Close(b.fd)
+// Close closes the I2C bus.
+func (b *I2CBus) Close() {
+	close(b.done)
 }
 
 // Reset resets the I2C bus by sending the reset command.
-func (b *i2c) Reset() error {
-	_, err := b.transfer(CallAddr, false, []byte{0})
-	return err
+func (b *I2CBus) Reset() {
+	b.work <- func() error {
+		_, err := b.transfer(CallAddr, false, []byte{0})
+		return err
+	}
 }
 
 // Send sends a packet to the I2C bus.
-func (b *i2c) Send(events chan<- Event, pkt Packet) error {
-	s := b.arp.slave(pkt.Addr)
-	if s == nil {
-		events <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
-	}
+func (b *I2CBus) Send(pkt Packet) {
+	b.work <- func() error {
+		s := b.arp.slave(pkt.Addr)
+		if s == nil {
+			b.ev <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
+		}
 
-	ok, err := b.transfer(pkt.Addr, false, pkt.Data)
-	if err != nil {
-		return err
-	}
+		ok, err := b.transfer(pkt.Addr, false, pkt.Data)
+		if err != nil {
+			return err
+		}
 
-	if ok {
-		s.touch()
-	} else {
-		events <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
-	}
+		if ok {
+			s.touch()
+		} else {
+			b.ev <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
+		}
 
-	return nil
+		return nil
+	}
 }
 
-// Poll polls packets from the I2C bus.
-func (b *i2c) Poll(events chan<- Event) error {
+// Events provides access to the channel of bus events.
+func (b *I2CBus) Events() <-chan Event {
+	return b.ev
+}
+
+func (b *I2CBus) processWork() {
+	defer func() {
+		b.ticker.Stop()
+		b.alert.close()
+		_ = syscall.Close(b.i2c)
+		close(b.ev)
+	}()
+
+	var alert bool
+
+	for {
+		// wait for next event
+		select {
+		case <-b.done:
+			// we are done here
+			return
+
+		case <-b.ticker.C:
+			if err := b.discover(); err != nil {
+				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO err
+				return
+			}
+
+		case fn := <-b.work:
+			// do some work
+			if err := fn(); err != nil {
+				// terminate with the error
+				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO err
+				return
+			}
+
+		case s, ok := <-b.alert.state:
+			if !ok {
+				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO b.alert.err
+				return
+			}
+			alert = s == 0
+		}
+
+		// process alert, not more than MaxSlaves in a row
+		limit := MaxSlaves
+
+		for alert {
+			if err := b.poll(); err != nil {
+				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO err
+				return
+			}
+
+			if limit == 0 {
+				// stop processing alerts TODO bus error instead?
+				break
+			}
+
+			limit--
+
+			select {
+			case s, ok := <-b.alert.state:
+				if !ok {
+					b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO b.alert.err
+					return
+				}
+				alert = s == 0
+
+			default:
+				// poll for another packet
+				break
+			}
+		}
+	}
+}
+
+func (b *I2CBus) poll() error {
 	// perform poll transaction first
 	buf := make([]byte, 2)
 	if ok, err := b.transfer(PollAddr, true, buf); err != nil {
@@ -100,7 +214,7 @@ func (b *i2c) Poll(events chan<- Event) error {
 
 	s := b.arp.slave(addr)
 	if s == nil || n < 1 || n > MaxPacketSize {
-		events <- Event{Type: ErrorEvent, Err: BusError}
+		b.ev <- Event{Type: ErrorEvent, Err: BusError}
 		return nil
 	}
 
@@ -113,18 +227,17 @@ func (b *i2c) Poll(events chan<- Event) error {
 
 	if ok {
 		s.touch()
-		events <- Event{Type: PacketEvent, Pkt: &Packet{addr, data}}
+		b.ev <- Event{Type: PacketEvent, Pkt: &Packet{addr, data}}
 	} else {
-		events <- Event{Type: ErrorEvent, Err: AckError, Addr: addr}
+		b.ev <- Event{Type: ErrorEvent, Err: AckError, Addr: addr}
 	}
 
 	return nil
 }
 
-// Discover pings all existing slaves and tries to discover new ones.
-func (b *i2c) Discover(events chan<- Event) error {
+func (b *I2CBus) discover() error {
 	// ping silent slaves
-	if err := b.ping(events); err != nil {
+	if err := b.ping(); err != nil {
 		return err
 	}
 
@@ -146,15 +259,15 @@ func (b *i2c) Discover(events chan<- Event) error {
 		s, err := b.arp.register(dev)
 		if err != nil {
 			// failed to register new slave
-			events <- Event{Type: ErrorEvent, Err: RegError}
+			b.ev <- Event{Type: ErrorEvent, Err: RegError}
 			return nil
 		}
 
-		events <- Event{Type: ConnectEvent, Addr: s.addr, Dev: dev}
+		b.ev <- Event{Type: ConnectEvent, Addr: s.addr, Dev: dev}
 	}
 }
 
-func (b *i2c) ping(events chan<- Event) error {
+func (b *I2CBus) ping() error {
 	for _, s := range b.arp.slaves {
 		if s == nil || s.active() {
 			continue
@@ -174,13 +287,13 @@ func (b *i2c) ping(events chan<- Event) error {
 		// slave did not answered
 		// TODO(mbenda): error counter?
 		b.arp.unregister(s)
-		events <- Event{Type: DisconnectEvent, Addr: s.addr}
+		b.ev <- Event{Type: DisconnectEvent, Addr: s.addr}
 	}
 
 	return nil
 }
 
-func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
+func (b *I2CBus) transfer(addr Address, read bool, data []byte) (bool, error) {
 	const (
 		I2cMRd  = 0x0001
 		I2cRdwr = 0x0707
@@ -200,7 +313,7 @@ func (b *i2c) transfer(addr Address, read bool, data []byte) (bool, error) {
 	// prepare RDWR ioctl data
 	rdwr := i2cRdwrIoctlData{uintptr(unsafe.Pointer(&msg)), 1}
 
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(b.fd), uintptr(I2cRdwr), uintptr(unsafe.Pointer(&rdwr)))
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(b.i2c), uintptr(I2cRdwr), uintptr(unsafe.Pointer(&rdwr)))
 	if errno != 0 {
 		// TODO(mbenda): determine which errors are fatal... or count number of successive errors
 		return false, nil

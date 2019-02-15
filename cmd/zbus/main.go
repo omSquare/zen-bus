@@ -37,7 +37,7 @@ type input struct {
 func main() {
 	dev, pin := parseCmdLine()
 
-	b, err := zbus.New(dev, pin)
+	b, err := zbus.NewI2CBus(dev, pin)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(exitIOErr)
@@ -57,9 +57,9 @@ func main() {
 				err = processCommand(b, in.cmd)
 			}
 
-		case ev, ok := <-b.Events:
+		case ev, ok := <-b.Events():
 			if !ok {
-				err = b.Err
+				err = nil
 			} else {
 				err = processEvent(proto, ev)
 			}
@@ -117,7 +117,7 @@ func readCommands(proto Protocol) chan input {
 	return ch
 }
 
-func processCommand(b *zbus.Bus, cmd Command) error {
+func processCommand(b zbus.Bus, cmd Command) error {
 	switch cmd.Type {
 	case CmdReset:
 		b.Reset()
@@ -134,6 +134,9 @@ func processEvent(p Protocol, ev zbus.Event) error {
 		p.WritePacket(*ev.Pkt)
 
 	case zbus.ErrorEvent:
+		if ev.Err == zbus.SysError {
+			return errors.New("unrecoverable bus error") // TODO proper SysError error passing
+		}
 		p.WriteError(ev.Addr)
 
 	case zbus.ConnectEvent:
