@@ -80,7 +80,7 @@ func (b *i2c) send(events chan<- Event, pkt Packet) error {
 	return nil
 }
 
-func (b *i2c) poll(events chan<- Event, a *arp) error {
+func (b *i2c) poll(events chan<- Event) error {
 	// perform poll transaction first
 	buf := make([]byte, 2)
 	if ok, err := b.transfer(PollAddr, true, buf); err != nil {
@@ -94,7 +94,7 @@ func (b *i2c) poll(events chan<- Event, a *arp) error {
 	addr := buf[0]
 	n := uint8(buf[1])
 
-	s := a.slave(addr)
+	s := b.arp.slave(addr)
 	if s == nil || n < 1 || n > MaxPacketSize {
 		events <- Event{Type: ErrorEvent, Err: BusError}
 		return nil

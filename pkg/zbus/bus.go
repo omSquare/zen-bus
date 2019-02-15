@@ -227,7 +227,7 @@ func (b *Bus) processWork() {
 		limit := MaxSlaves
 
 		for alert {
-			if err := b.bus.poll(b.ev, b.arp); err != nil {
+			if err := b.bus.poll(b.ev); err != nil {
 				b.Err = err
 				return
 			}
