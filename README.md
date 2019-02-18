@@ -11,7 +11,7 @@ I/O devices. This project implements the master-side of the bus on Linux using i
 
 ### Requirements
 
-Zbus compiles only with `GOOS=linux`.
+Hardware bus is supported only on _linux_.
 
 ### References
 

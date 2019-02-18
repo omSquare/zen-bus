@@ -130,6 +130,9 @@ func processCommand(b zbus.Bus, cmd Command) error {
 
 func processEvent(p Protocol, ev zbus.Event) error {
 	switch ev.Type {
+	case zbus.ResetEvent:
+		p.WriteReset()
+
 	case zbus.PacketEvent:
 		p.WritePacket(*ev.Pkt)
 

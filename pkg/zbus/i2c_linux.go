@@ -29,7 +29,7 @@ type I2CBus struct {
 	ticker *time.Ticker
 	work   chan func() error
 	done   chan struct{}
-	arp    *arp
+	arp    arp
 
 	i2c   int
 	alert *gpio
@@ -81,10 +81,11 @@ func NewI2CBus(dev int, pin int) (*I2CBus, error) {
 		work:   make(chan func() error),
 		done:   make(chan struct{}),
 
-		arp:   &arp{},
 		i2c:   i2c,
 		alert: alert,
 	}
+
+	b.Reset()
 
 	return b, nil
 }
@@ -98,7 +99,15 @@ func (b *I2CBus) Close() {
 func (b *I2CBus) Reset() {
 	b.work <- func() error {
 		_, err := b.transfer(CallAddr, false, []byte{0})
-		return err
+		if err != nil {
+			return err
+		}
+
+		b.arp = arp{}
+
+		b.ev <- Event{Type: ResetEvent}
+
+		return nil
 	}
 }
 
@@ -262,6 +271,17 @@ func (b *I2CBus) discover() error {
 		s, err := b.arp.register(dev)
 		if err != nil {
 			// failed to register new slave
+			b.ev <- Event{Type: ErrorEvent, Err: RegError}
+			return nil
+		}
+
+		// notify the slave
+		disc[8] = s.addr
+		if ok, err := b.transfer(ConfAddr, false, disc); err != nil {
+			return err
+		} else if !ok {
+			// device did not configure properly
+			b.arp.unregister(s)
 			b.ev <- Event{Type: ErrorEvent, Err: RegError}
 			return nil
 		}

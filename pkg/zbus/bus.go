@@ -47,6 +47,9 @@ const (
 )
 
 const (
+	// ResetEvent indicates a bus reset.
+	ResetEvent eventType = iota
+
 	// PacketEvent indicates an incoming packet.
 	PacketEvent eventType = iota
 
@@ -80,7 +83,7 @@ const (
 
 // Bus holds a channel that delivers asynchronous bus events.
 type Bus interface {
-	// Close closes the bus asynchronously.
+	// Close closes the bus.
 	Close()
 
 	// Reset resets the state of the bus asynchronously.
@@ -109,6 +112,11 @@ type Address = uint8
 type Packet struct {
 	Addr Address
 	Data []byte
+}
+
+// Len returns the length of the packet as an unsigned byte.
+func (pkt *Packet) Len() uint8 {
+	return uint8(len(pkt.Data))
 }
 
 // Udid stands for Unique Device Identifier.

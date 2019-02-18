@@ -56,6 +56,11 @@ func (p *TextProtocol) WriteError(addr uint8) {
 	fmt.Fprintf(p.w, "ERR %02X\n", addr)
 }
 
+// WriteReset outputs the "RST" command.
+func (p *TextProtocol) WriteReset() {
+	fmt.Fprint(p.w, "RST\n")
+}
+
 // WritePacket outputs the "PKT" command.
 func (p *TextProtocol) WritePacket(pkt zbus.Packet) {
 	fmt.Fprintf(p.w, "PKT %02X %02X\n", pkt.Addr, len(pkt.Data))

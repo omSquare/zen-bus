@@ -25,7 +25,7 @@ const (
 
 	numAddr = maxAddr - minAddr
 
-	silenceLimit time.Duration = 5 * time.Second
+	silenceLimit = 5 * time.Second
 )
 
 var (
@@ -70,6 +70,10 @@ func (a *arp) register(dev *Device) (*slave, error) {
 }
 
 func (a *arp) unregister(s *slave) {
+	if s == nil {
+		return
+	}
+
 	if a.slaves[s.index()] == s {
 		a.slaves[s.index()] = nil
 		a.num--

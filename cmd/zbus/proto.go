@@ -38,6 +38,7 @@ type Protocol interface {
 	Read() (Command, error)
 	WriteVersion(ver string)
 	WriteError(addr uint8)
+	WriteReset()
 	WritePacket(pkt zbus.Packet)
 	WriteConnect(addr uint8)
 	WriteDisconnect(addr uint8)
