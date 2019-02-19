@@ -49,20 +49,26 @@ func main() {
 }
 
 func parseCmdLine() (dev, pin int) {
+	if len(os.Args) == 1 {
+		printHelp()
+		os.Exit(exitUsage)
+	}
+
 	if len(os.Args) != 3 {
-		usage()
+		printErr("error: invalid arguments")
+		os.Exit(exitUsage)
 	}
 
 	dev, err := strconv.Atoi(os.Args[1])
 	if err != nil {
 		printErr("error: invalid I2C device number\n")
-		usage()
+		os.Exit(exitUsage)
 	}
 
 	pin, err = strconv.Atoi(os.Args[2])
 	if err != nil {
 		printErr("error: invalid GPIO pin number\n")
-		usage()
+		os.Exit(exitUsage)
 	}
 
 	return
@@ -72,9 +78,27 @@ func printErr(format string, args ...interface{}) {
 	_, _ = fmt.Fprintf(os.Stderr, format, args...)
 }
 
-func usage() {
-	printErr("usage: %v <i2c_num> <gpio_num>\n", os.Args[0])
-	os.Exit(exitUsage)
+func printHelp() {
+	// TODO(mbenda): version
+	printErr(`ZEN-bus master
+
+This program provides master-side implementation of the ZEN-bus protocol. Hardware ZEN-bus is supported only on Linux
+and is implemented using I²C and GPIO. For other platforms and testing/debugging there is a "simulated" bus based
+on a simple binary TCP protocol. ZEN module firmware will use this bus simulation when running on native POSIX platform.
+
+To create an I²C Zbus master, run
+
+  zbus i2c <i2c_num> <gpio_num>
+
+where <i2c_num> is the number of the I²C device (/dev/i2c-X) and and <gpio_num> is the number of the GPIO pin
+(/sys/class/gpio/gpioX). 
+
+To create a simulated Zbus master, run
+
+  zbus sim <address>
+
+where <address> is the address in "host:port" format the TCP server will bind to. The server will bind to all available
+interfaces if the "host" part is empty. Some examples: ":7802", "[::1]:7802"`)
 }
 
 func loop(b zbus.Bus) int {
