@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: all test build docker-test
+.PHONY: all test build install docker-test
 
 all: test
 
@@ -22,6 +22,9 @@ test:
 build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -o build/zbus.arm github.com/omSquare/zen-bus/cmd/zbus
 	CGO_ENABLED=0 GOOS=linux GOARCH=mipsle go build -o build/zbus.mipsle github.com/omSquare/zen-bus/cmd/zbus
+
+install:
+	CGO_ENABLED=0 go install github.com/omSquare/zen-bus/cmd/zbus
 
 # run pkg/zbus tests in a dockerized Linux container
 docker-test:
