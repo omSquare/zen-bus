@@ -54,6 +54,7 @@ type client struct {
 	addr Address
 }
 
+// NewSimBus creates a new Zbus simulator listening on the provided address.
 func NewSimBus(addr string) (*SimBus, error) {
 	b := &SimBus{
 		ev:   make(chan Event, EventCapacity),
@@ -110,6 +111,7 @@ func (b *SimBus) Reset() {
 	}
 }
 
+// Send sends a packet via the simulated bus.
 func (b *SimBus) Send(pkt Packet) {
 	b.work <- func() error {
 		log.Printf("sending packet %v\n", pkt)
@@ -137,6 +139,7 @@ func (b *SimBus) Send(pkt Packet) {
 	}
 }
 
+// Events provides access to the channel of bus events.
 func (b *SimBus) Events() <-chan Event {
 	return b.ev
 }
@@ -265,7 +268,7 @@ func parseHandshake(conn *net.TCPConn) (Udid, error) {
 
 	ver := binary.BigEndian.Uint16(buf[2:])
 	if (ver & 0xFF00) != (version & 0xFF00) {
-		return Udid{}, errors.New(fmt.Sprintf("incompatible versions (client: %04x, server: %04x)", ver, version))
+		return Udid{}, fmt.Errorf("incompatible versions (client: %04x, server: %04x)", ver, version)
 	}
 
 	// read UDID
