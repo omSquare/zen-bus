@@ -39,7 +39,7 @@ func main() {
 	dev, pin := parseCmdLine()
 
 	b, err := zbus.NewI2CBus(dev, pin)
-	b, err = zbus.NewSimBus(":7082")
+	//b, err = zbus.NewSimBus(":7082")
 	if err != nil {
 		printErr("error: %v\n", err)
 		os.Exit(exitIOErr)
