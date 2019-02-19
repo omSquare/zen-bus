@@ -80,7 +80,7 @@ func (b *SimBus) Close() {
 		_ = recover()
 	}()
 
-	log.Println("Closing...")
+	log.Println("closing bus")
 	close(b.done)
 	<-b.term
 }
@@ -88,7 +88,7 @@ func (b *SimBus) Close() {
 // Reset resets the simulated bus by closing and re-opening the server
 func (b *SimBus) Reset() {
 	b.work <- func() error {
-		log.Println("resetting bus...")
+		log.Println("resetting bus")
 
 		b.closeAll()
 

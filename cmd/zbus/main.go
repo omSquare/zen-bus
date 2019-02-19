@@ -36,10 +36,28 @@ type input struct {
 }
 
 func main() {
-	dev, pin := parseCmdLine()
+	if len(os.Args) == 1 {
+		printHelp()
+		os.Exit(exitUsage)
+	}
 
-	b, err := zbus.NewI2CBus(dev, pin)
-	//b, err = zbus.NewSimBus(":7082")
+	var (
+		b   zbus.Bus
+		err error
+	)
+
+	switch os.Args[1] {
+	case "i2c":
+		b, err = createI2CBus()
+
+	case "sim":
+		b, err = createSimBus()
+
+	default:
+		printErr("error: invalid bus type '%s'", os.Args[1])
+		os.Exit(exitUsage)
+	}
+
 	if err != nil {
 		printErr("error: %v\n", err)
 		os.Exit(exitIOErr)
@@ -48,30 +66,34 @@ func main() {
 	os.Exit(loop(b))
 }
 
-func parseCmdLine() (dev, pin int) {
-	if len(os.Args) == 1 {
-		printHelp()
+func createI2CBus() (zbus.Bus, error) {
+	if len(os.Args) != 4 {
+		printErr("error: invalid 'i2c' bus arguments")
 		os.Exit(exitUsage)
 	}
 
-	if len(os.Args) != 3 {
-		printErr("error: invalid arguments")
-		os.Exit(exitUsage)
-	}
-
-	dev, err := strconv.Atoi(os.Args[1])
+	dev, err := strconv.Atoi(os.Args[2])
 	if err != nil {
 		printErr("error: invalid I2C device number\n")
 		os.Exit(exitUsage)
 	}
 
-	pin, err = strconv.Atoi(os.Args[2])
+	pin, err := strconv.Atoi(os.Args[3])
 	if err != nil {
 		printErr("error: invalid GPIO pin number\n")
 		os.Exit(exitUsage)
 	}
 
-	return
+	return zbus.NewI2CBus(dev, pin)
+}
+
+func createSimBus() (zbus.Bus, error) {
+	if len(os.Args) != 3 {
+		printErr("error: invalid 'i2c' bus arguments")
+		os.Exit(exitUsage)
+	}
+
+	return zbus.NewSimBus(os.Args[2])
 }
 
 func printErr(format string, args ...interface{}) {
@@ -79,26 +101,28 @@ func printErr(format string, args ...interface{}) {
 }
 
 func printHelp() {
-	// TODO(mbenda): version
 	printErr(`ZEN-bus master
 
-This program provides master-side implementation of the ZEN-bus protocol. Hardware ZEN-bus is supported only on Linux
-and is implemented using I²C and GPIO. For other platforms and testing/debugging there is a "simulated" bus based
-on a simple binary TCP protocol. ZEN module firmware will use this bus simulation when running on native POSIX platform.
+This program provides master-side implementation of the ZEN-bus protocol.
+Hardware ZEN-bus is supported only on Linux and is implemented using I²C
+and GPIO. For other platforms and testing/debugging there is a "simulated"
+bus based on a simple binary TCP protocol. ZEN module firmware will use
+this bus simulation when running on native POSIX platform.
 
 To create an I²C Zbus master, run
 
   zbus i2c <i2c_num> <gpio_num>
 
-where <i2c_num> is the number of the I²C device (/dev/i2c-X) and and <gpio_num> is the number of the GPIO pin
-(/sys/class/gpio/gpioX). 
+where <i2c_num> is the number of the I²C device (/dev/i2c-X) and <gpio_num>
+is the number of the GPIO pin (/sys/class/gpio/gpioX). 
 
 To create a simulated Zbus master, run
 
   zbus sim <address>
 
-where <address> is the address in "host:port" format the TCP server will bind to. The server will bind to all available
-interfaces if the "host" part is empty. Some examples: ":7802", "[::1]:7802"`)
+where <address> is the address in "host:port" format the TCP server will
+bind to. The server will bind to all available interfaces if the "host" part
+is empty. Some examples: ":7802", "[::1]:7802"`)
 }
 
 func loop(b zbus.Bus) int {
@@ -150,15 +174,6 @@ loop:
 	}
 
 	return 0
-}
-
-func handleInterrupt() {
-	sig := make(chan os.Signal, 8)
-	signal.Notify(sig, os.Interrupt)
-
-	<-sig
-
-	printErr("terminating...\n")
 }
 
 func readCommands(proto Protocol) chan input {
