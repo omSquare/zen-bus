@@ -122,7 +122,8 @@ To create a simulated Zbus master, run
 
 where <address> is the address in "host:port" format the TCP server will
 bind to. The server will bind to all available interfaces if the "host" part
-is empty. Some examples: ":7802", "[::1]:7802"`)
+is empty. Some examples: ":7802", "[::1]:7802"
+`)
 }
 
 func loop(b zbus.Bus) int {
