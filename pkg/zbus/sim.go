@@ -32,12 +32,14 @@ const (
 	cmdQuit   uint8 = 0xFF
 )
 
+// SimBus is a simulated Zbus implementation that creates a TCP server
 type SimBus struct {
 	ev   chan Event
 	work chan func() error
 	conn chan client
 	disc chan client
 	done chan struct{}
+	term chan struct{}
 
 	addr    string
 	server  *net.TCPListener
@@ -59,6 +61,7 @@ func NewSimBus(addr string) (*SimBus, error) {
 		conn: make(chan client),
 		disc: make(chan client),
 		done: make(chan struct{}),
+		term: make(chan struct{}),
 
 		addr:    addr,
 		clients: make(map[Address]client),
@@ -70,9 +73,16 @@ func NewSimBus(addr string) (*SimBus, error) {
 	return b, nil
 }
 
+// Close closes the simulated bus.
 func (b *SimBus) Close() {
+	defer func() {
+		// handle the case when the done/term channels are already closed
+		_ = recover()
+	}()
+
+	log.Println("Closing...")
 	close(b.done)
-	// TODO(mbenda):
+	<-b.term
 }
 
 // Reset resets the simulated bus by closing and re-opening the server
@@ -80,15 +90,7 @@ func (b *SimBus) Reset() {
 	b.work <- func() error {
 		log.Println("resetting bus...")
 
-		// close the server
-		if b.server != nil {
-			_ = b.server.Close()
-		}
-
-		// close all clients
-		for _, cl := range b.clients {
-			_ = cl.conn.CloseRead()
-		}
+		b.closeAll()
 
 		// reset ARP and re-open server
 		b.clients = make(map[Address]client)
@@ -139,10 +141,22 @@ func (b *SimBus) Events() <-chan Event {
 	return b.ev
 }
 
+func (b *SimBus) closeAll() {
+	// close the listener and all client connections
+	if b.server != nil {
+		_ = b.server.Close()
+	}
+
+	for _, cl := range b.clients {
+		closeClient(cl)
+	}
+}
+
 func (b *SimBus) processWork() {
 	defer func() {
 		log.Println("terminating")
-		//b.server.Close() // TODO ???
+		b.closeAll()
+		close(b.term)
 	}()
 
 	for {
@@ -154,7 +168,7 @@ func (b *SimBus) processWork() {
 		case fn := <-b.work:
 			if err := fn(); err != nil {
 				log.Println(err)
-				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO err
+				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO(mbenda): error reporting
 				return
 			}
 
@@ -164,10 +178,11 @@ func (b *SimBus) processWork() {
 
 			slave, err := b.arp.register(c.dev)
 			if err != nil {
-				log.Println("rejecting client:", err)
 				// reject the client
-				// TODO(mbenda): send response, event
+				log.Println("rejecting client:", err)
+
 				_ = c.conn.Close()
+				b.ev <- Event{Type: ErrorEvent, Err: RegError}
 				continue
 			}
 
@@ -176,9 +191,7 @@ func (b *SimBus) processWork() {
 				// drop previous client
 				log.Printf("closing previous client connection from %v\n", c.conn.RemoteAddr())
 
-				// deliberately ignore errors
-				_, _ = prev.conn.Write([]byte{cmdQuit})
-				_ = prev.conn.CloseRead()
+				closeClient(prev)
 			}
 
 			c.addr = slave.addr
@@ -322,4 +335,10 @@ func (b *SimBus) processSlave(c client) {
 
 		b.ev <- Event{Type: PacketEvent, Pkt: &pkt}
 	}
+}
+
+func closeClient(c client) {
+	// deliberately ignore errors
+	_, _ = c.conn.Write([]byte{cmdQuit})
+	_ = c.conn.CloseRead()
 }

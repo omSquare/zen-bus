@@ -21,6 +21,7 @@ import (
 	"github.com/omSquare/zen-bus/pkg/zbus"
 	"io"
 	"os"
+	"os/signal"
 	"strconv"
 )
 
@@ -38,16 +39,66 @@ func main() {
 	dev, pin := parseCmdLine()
 
 	b, err := zbus.NewI2CBus(dev, pin)
+	b, err = zbus.NewSimBus(":7082")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		printErr("error: %v\n", err)
 		os.Exit(exitIOErr)
 	}
+
+	os.Exit(loop(b))
+}
+
+func parseCmdLine() (dev, pin int) {
+	if len(os.Args) != 3 {
+		usage()
+	}
+
+	dev, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		printErr("error: invalid I2C device number\n")
+		usage()
+	}
+
+	pin, err = strconv.Atoi(os.Args[2])
+	if err != nil {
+		printErr("error: invalid GPIO pin number\n")
+		usage()
+	}
+
+	return
+}
+
+func printErr(format string, args ...interface{}) {
+	_, _ = fmt.Fprintf(os.Stderr, format, args...)
+}
+
+func usage() {
+	printErr("usage: %v <i2c_num> <gpio_num>\n", os.Args[0])
+	os.Exit(exitUsage)
+}
+
+func loop(b zbus.Bus) int {
+	defer b.Close()
+
+	done := make(chan struct{})
+
+	go func() {
+		sig := make(chan os.Signal, 8)
+		signal.Notify(sig, os.Interrupt)
+
+		<-sig
+
+		close(done)
+	}()
 
 	proto := NewTextProtocol(os.Stdin, os.Stdout)
 	input := readCommands(proto)
 
 	proto.WriteVersion(zbus.Version)
 
+	var err error
+
+loop:
 	for err = error(nil); err == nil; {
 		select {
 		case in, ok := <-input:
@@ -63,40 +114,27 @@ func main() {
 			} else {
 				err = processEvent(proto, ev)
 			}
+
+		case <-done:
+			break loop
 		}
 	}
 
-	b.Close()
-
 	if err != nil && err != io.EOF {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(exitIOErr)
+		printErr("error: %v\n", err)
+		return exitIOErr
 	}
+
+	return 0
 }
 
-func parseCmdLine() (dev, pin int) {
-	if len(os.Args) != 3 {
-		usage()
-	}
+func handleInterrupt() {
+	sig := make(chan os.Signal, 8)
+	signal.Notify(sig, os.Interrupt)
 
-	dev, err := strconv.Atoi(os.Args[1])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: invalid I2C device number")
-		usage()
-	}
+	<-sig
 
-	pin, err = strconv.Atoi(os.Args[2])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error: invalid GPIO pin number")
-		usage()
-	}
-
-	return
-}
-
-func usage() {
-	fmt.Fprintf(os.Stderr, "usage: %v <i2c_num> <gpio_num>\n", os.Args[0])
-	os.Exit(exitUsage)
+	printErr("terminating...\n")
 }
 
 func readCommands(proto Protocol) chan input {
@@ -138,7 +176,8 @@ func processEvent(p Protocol, ev zbus.Event) error {
 
 	case zbus.ErrorEvent:
 		if ev.Err == zbus.SysError {
-			return errors.New("unrecoverable bus error") // TODO proper SysError error passing
+			// TODO(mbenda): proper SysError error passing
+			return errors.New("unrecoverable bus error")
 		}
 		p.WriteError(ev.Addr)
 
