@@ -127,6 +127,7 @@ func (b *I2CBus) Send(pkt Packet) {
 		if ok {
 			s.touch()
 		} else {
+			// TODO(mbenda): backoff/retry?
 			b.ev <- Event{Type: ErrorEvent, Err: AckError, Addr: pkt.Addr}
 		}
 
@@ -171,6 +172,7 @@ func (b *I2CBus) processWork() {
 			}
 
 		case s, ok := <-b.alert.state:
+			// TODO(mbenda): higher priority
 			if !ok {
 				b.ev <- Event{Type: ErrorEvent, Err: SysError} // TODO b.alert.err
 				return

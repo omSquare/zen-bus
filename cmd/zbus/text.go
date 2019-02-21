@@ -216,7 +216,11 @@ func hexDigit(ch byte) int {
 	}
 
 	if ch >= 'A' && ch <= 'F' {
-		return int(ch - 'A')
+		return 10 + int(ch-'A')
+	}
+
+	if ch >= 'a' && ch <= 'f' {
+		return 10 + int(ch-'a')
 	}
 
 	return -1
